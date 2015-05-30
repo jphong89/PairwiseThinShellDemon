@@ -79,6 +79,7 @@ lbfgsfloatval_t penalizeStretch(const lbfgsfloatval_t *u, lbfgsfloatval_t *g);
 lbfgsfloatval_t penalizeBend(const lbfgsfloatval_t *u, lbfgsfloatval_t *g);
 lbfgsfloatval_t penalizeLink(const lbfgsfloatval_t *u, lbfgsfloatval_t *g);
 lbfgsfloatval_t penalizeBendQuadratic(const lbfgsfloatval_t *tu, lbfgsfloatval_t *g);
+lbfgsfloatval_t penalizaeLandmark(const lbfgsfloatval_t *u, lbfgsfloatval_t *g);
 
 double computeStretchGradient(int n,int nd,int e,int ed);
 double computeAngleGradient(int i,int j,Point_3 V1,Point_3 V2,Point_3 V3,Point_3 V4);

@@ -156,7 +156,7 @@ void *startOptimization(void * arg){
 		writeOFF(RCSurface,filename);
 
 		cout<<"L-BFGS optimization terminated with status code: "<<ret<<"fx: "<<fx<<endl;
-
+		if (i % 3 == 0) cin>>ret;
 	}
 
 	//final iteration evaluation
@@ -184,7 +184,7 @@ static lbfgsfloatval_t evaluate(
 	/* bending */
 	double bending = penalizeBendQuadratic(u,g);
 	//double bending = 0;
-
+	double landmark = penalizaeLandmark(u,g);
  	//double linkStretching = penalizeLink(u,g);
 // 	double linkStretching = 0;
 // 	for (int i = 0; i < RCSurface->linkNum; i++){
@@ -203,7 +203,7 @@ static lbfgsfloatval_t evaluate(
 // 		linkStretching += LINKWEIGHT * deformVec.squared_length();
 // 	}
 	pthread_mutex_unlock(&lock);
-	return data + stretching +  bending  /*+ linkStretching*/;
+	return data + stretching +  bending +landmark /*+ linkStretching*/;
 }
 
 lbfgsfloatval_t penalizeData(const lbfgsfloatval_t *u, lbfgsfloatval_t *g){
@@ -565,6 +565,27 @@ lbfgsfloatval_t penalizeLink(const lbfgsfloatval_t *u, lbfgsfloatval_t *g){
 	distantLink = linkEnergy;
 
 	return linkEnergy;
+}
+
+lbfgsfloatval_t penalizaeLandmark(const lbfgsfloatval_t *u, lbfgsfloatval_t *g){
+	PolyhedralSurf::Vertex_const_handle vh;
+	double weight = 20;
+
+	lbfgsfloatval_t fx = 0.0;
+	for (int i = 0; i<RCSurface->landmarkNum; i++){
+		int idx = RCSurface->landmark[i];
+		vh = RCSurface->vertexIndex[idx];
+		Point_3 deformed = vh->point() + Vector_3(u[idx*3],u[idx*3+1],u[idx*3+2]);
+		Vector_3 dis(deformed,CTSurface->vertexIndex[CTSurface->landmark[i]]->point());
+
+		fx = fx + weight*dis.squared_length();
+		g[idx*3] += -2 * dis.x() * weight;
+		g[idx*3+1] += -2 * dis.y() * weight;
+		g[idx*3+2] += -2 * dis.z() * weight;
+
+	}
+
+	return fx;
 }
 
 double computeStretchGradient(int n,int m,int x,int y){

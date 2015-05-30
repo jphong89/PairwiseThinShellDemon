@@ -148,6 +148,7 @@ BasicMesh::BasicMesh(string filename,string tagt,string PName,string PNum){
 	attractor_name = "data/" + PatientName + "/attractor.off";
 	attractee_name = "data/" + PatientName + "/attractee.off";
 	occluded_name = "data/" + PatientName + "/occludedRegion.txt";
+
 	linkNum = 0;
 
 	for (int i = 0; i < 8; i++){
@@ -686,5 +687,33 @@ void BasicMesh::constructOccluded(){
 		occluded[temp] = true;
 	}
 
+	fin.close();
+}
+
+void BasicMesh::constructLandmark(string filename){
+	ifstream fin;
+	fin.open(filename);
+	//cout<<filename<<endl;
+
+	fin>>landmarkNum;
+	landmark = new int[landmarkNum];
+
+	double x,y,z;
+	double minDis;
+	for (int i = 0; i<landmarkNum; i++){
+		fin>>x>>y>>z;
+		//cout<<x<<' '<<y<<' '<<z<<endl;
+		minDis = 10000;
+		for (int j = 0; j<vertexNum; j++){
+			Vector_3 dis(vertexIndex[j]->point(),Point_3(x,y,z));
+
+			if (dis.squared_length()<minDis){
+				landmark[i] = j;
+				minDis = dis.squared_length();
+			}
+		}
+
+		//cout<<landmark[i]<<endl;
+	}
 	fin.close();
 }

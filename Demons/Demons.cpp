@@ -119,8 +119,8 @@ int main(int argc, char* argv[])
 		patientNum = new char[20]; //manully designate object name
 		caseNum = new char[20];
 
-		patientNum = "5708";//manually designate object name
-		caseNum = "4";//manually designate index number
+		patientNum = "5708_partial1";//manually designate object name
+		caseNum = "2";//manually designate index number
 	}
 
 	////////////////////////////////////////* read files */////////////////////////////////
@@ -139,10 +139,12 @@ int main(int argc, char* argv[])
 	cout<<"Begin Constructing First Mesh: "<<filename1<<endl;
 	RCSurface = new BasicMesh(filename1,"origin",patientNum,caseNum);
 	RCSurface->ComputeMeshProperty(filename1);
+	RCSurface->constructLandmark("data/5708_partial1/2_origin_landmark.txt");
 
 	cout<<"Begin Construction Second Mesh: "<<filename2<<endl;
 	CTSurface = new BasicMesh(filename2,"deformed",patientNum,caseNum);
 	CTSurface->ComputeMeshProperty(filename2);
+	CTSurface->constructLandmark("data/5708_partial1/2_deformed_landmark.txt");
 
 	affinityM = RCSurface->vertexNum;
 	affinityN = CTSurface->vertexNum;
@@ -161,7 +163,7 @@ int main(int argc, char* argv[])
 	cout<<statisticVertexNum<<' '<<statisticBoundaryNum<<endl;
 
 	//RCSurface->constructLink();
-	RCSurface->constructOccluded();
+	//RCSurface->constructOccluded();
 	//RCSurface->constructAttractor();
 	RCSurface->constructEdgeList();
 	RCSurface->constructVertexList();

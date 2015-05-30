@@ -635,7 +635,7 @@ void BasicMesh::findMatch(BasicMesh* secondMesh){
 		
 /*		matchWeight[i] = sum;*/
 		if (sum > 2.5)
-			matchWeight[i] = 1 / (1 + exp(-0.5*(matchWeight[i]*100-55)));
+			matchWeight[i] = 1 / (1 + exp(-0.5*(matchWeight[i]*100-60)));
 		else
 			matchWeight[i] = 0;
 		

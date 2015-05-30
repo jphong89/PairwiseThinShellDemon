@@ -318,6 +318,7 @@ public:
 	void constructLink();
 	void constructAttractor();
 	void constructOccluded();
+	void constructLandmark(string filename);
 
 	/*REGISTRATION*/
 	void findCorrespondenceBothWay(BasicMesh*,double);
@@ -335,11 +336,13 @@ public:
 	int edgeNum;
 	int dirNum;
 	int linkNum;
+	int landmarkNum;
 
 	Vertex_const_handle matched;
 	facet* faceList;
 	edge* edgeList;
 	vertex* vertexList;
+	int* landmark;
 
 	threeTuple* marchList[8];
 	std::map<Vertex_const_handle, signature*> signatureMap; 

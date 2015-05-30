@@ -388,6 +388,17 @@ void drawExtra(BasicMesh* mesh){
 		}
 		glEnd();
 	}
+
+	glColor3f(1,0,0);
+	for (int i = 0; i < mesh->landmarkNum; i++){
+		Point_3 p = mesh->vertexIndex[mesh->landmark[i]]->point();
+
+		threeTuple a;
+		a.x = (p.x() - (maxx - minx) / 2 - minx) / max_all * camera_Scale;
+		a.y = (p.y() - (maxy - miny) / 2 - miny) / max_all * camera_Scale;
+		a.z = (p.z() - (maxz - minz) / 2 - minz) / max_all * camera_Scale;
+		drawSphere(a.x,a.y,a.z,0.5/max_all*camera_Scale,10,10);
+	}
 }
 
 void drawSphere(GLfloat xx, GLfloat yy, GLfloat zz, GLfloat radius, GLfloat M, GLfloat N)

@@ -150,6 +150,7 @@ BasicMesh::BasicMesh(string filename,string tagt,string PName,string PNum){
 	occluded_name = "data/" + PatientName + "/occludedRegion.txt";
 
 	linkNum = 0;
+	landmarkNum = 0;
 
 	for (int i = 0; i < 8; i++){
 		marchList[i] = NULL;
@@ -164,6 +165,7 @@ BasicMesh::BasicMesh(string filename,string tagt,string PName,string PNum){
 	dirNum = 8;
 }
 
+/* this function is borrowed for CGAL. however, translateMesh() is our own function for processing surfaces */
 int BasicMesh::ComputeMeshProperty(string filename){
 	Vertex2FT_property_map vertex2k1_pm(vertex2k1_map), vertex2k2_pm(vertex2k2_map),
 		vertex2b0_pm(vertex2b0_map), vertex2b3_pm(vertex2b3_map),
@@ -182,7 +184,7 @@ int BasicMesh::ComputeMeshProperty(string filename){
 	Poly_rings poly_rings(P);
 	compute_differential_quantities(P, poly_rings);
 
-	//construct data
+	//construct vertex<-->index mapping data
 	indexMap.clear();
 	signatureMap.clear();
 	vertexBool.clear();
@@ -195,13 +197,13 @@ int BasicMesh::ComputeMeshProperty(string filename){
 	PolyhedralSurf::Vertex_const_iterator ve = P.vertices_end();
 	PolyhedralSurf::Vertex_const_handle vh,minh;
 
-
 	for (int i = 0; vb != ve; vb++,i++){
 		vh = vb;
 		indexMap.insert(pair<Vertex_const_handle,int>(vh,i));
 		vertexIndex[i] = vh;
 	}
 	
+	/* translate surfaces (per faceet) */
 	translateMesh(vertex2k1_pm,vertex2k2_pm);
 
 	return 1;
@@ -693,27 +695,15 @@ void BasicMesh::constructOccluded(){
 void BasicMesh::constructLandmark(string filename){
 	ifstream fin;
 	fin.open(filename);
-	//cout<<filename<<endl;
 
 	fin>>landmarkNum;
+	cout<<"landmark number: "<<landmarkNum<<endl;
 	landmark = new int[landmarkNum];
 
-	double x,y,z;
-	double minDis;
+	double temp;
 	for (int i = 0; i<landmarkNum; i++){
-		fin>>x>>y>>z;
-		//cout<<x<<' '<<y<<' '<<z<<endl;
-		minDis = 10000;
-		for (int j = 0; j<vertexNum; j++){
-			Vector_3 dis(vertexIndex[j]->point(),Point_3(x,y,z));
-
-			if (dis.squared_length()<minDis){
-				landmark[i] = j;
-				minDis = dis.squared_length();
-			}
-		}
-
-		//cout<<landmark[i]<<endl;
+		fin>>temp;
+		landmark[i] = int(temp);
 	}
 	fin.close();
 }

@@ -92,7 +92,10 @@ void *startOptimization(void * arg){
 	memset(tempU,0,sizeof(lbfgsfloatval_t) * affinityM * 3);
 
 	double bestError = 100000;
-	for (int i = 0; i < 18; i++){
+	regweight = REGWEIGHT;
+	bendweight = BENDWEIGHT;
+
+	for (int i = 0; i < 10; i++){
 		cout<<"Velocity Iteration: "<<i<<endl;
 
 		if (i > 0){
@@ -117,7 +120,7 @@ void *startOptimization(void * arg){
 			RCSurface->constructVertexList();
 			RCSurface->findCorrespondenceBothWay(CTSurface,0.9/*min_zenyo(i * 0.13,1)*/);
 			cout<<"Recompute affinity map..."<<endl;
-			RCSurface->findMatch(CTSurface);
+			RCSurface->findMatch2(CTSurface);
 			//RCSurface->findClosestPoint(CTSurface);
 		}
 
@@ -126,8 +129,6 @@ void *startOptimization(void * arg){
 		int opIterNum = 80000;
 
 		lbfgs_parameter_t param;
-		regweight = REGWEIGHT;
-		bendweight = BENDWEIGHT;
 		ret = 0;
 
 		clock_t start, finish;
@@ -156,7 +157,15 @@ void *startOptimization(void * arg){
 		writeOFF(RCSurface,filename);
 
 		cout<<"L-BFGS optimization terminated with status code: "<<ret<<"fx: "<<fx<<endl;
-		if (i % 3 == 0) cin>>ret;
+		//if (i % 3 == 0) cin>>ret;
+		if ((i % 4 == 1)&&(i != 1)) {
+			char cmdLine[100];
+			sprintf(cmdLine,"meshlabserver -i %s -o %s -s meshlabscript_demons.mlx\n",filename,filename);
+			system(cmdLine);
+		}
+		
+		regweight *= 0.975;
+		bendweight *= 0.95;
 	}
 
 	//final iteration evaluation
@@ -184,7 +193,8 @@ static lbfgsfloatval_t evaluate(
 	/* bending */
 	double bending = penalizeBendQuadratic(u,g);
 	//double bending = 0;
-	double landmark = penalizaeLandmark(u,g);
+	//double landmark = penalizaeLandmark(u,g);
+
  	//double linkStretching = penalizeLink(u,g);
 // 	double linkStretching = 0;
 // 	for (int i = 0; i < RCSurface->linkNum; i++){
@@ -203,7 +213,7 @@ static lbfgsfloatval_t evaluate(
 // 		linkStretching += LINKWEIGHT * deformVec.squared_length();
 // 	}
 	pthread_mutex_unlock(&lock);
-	return data + stretching +  bending +landmark /*+ linkStretching*/;
+	return data + stretching +  bending /*+landmark + linkStretching*/;
 }
 
 lbfgsfloatval_t penalizeData(const lbfgsfloatval_t *u, lbfgsfloatval_t *g){
@@ -241,7 +251,7 @@ lbfgsfloatval_t penalizeData(const lbfgsfloatval_t *u, lbfgsfloatval_t *g){
 lbfgsfloatval_t penalizeStretch(const lbfgsfloatval_t *u, lbfgsfloatval_t *g){
 	double stretching = 0;
 
-	if (regweight > 0){ // edge-based  stretching energy
+	if (regweight < 0){ // edge-based  stretching energy
 		for (int i=0; i < RCSurface->edgeNum/2;i++){
 
 

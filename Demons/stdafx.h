@@ -20,21 +20,21 @@
 #define EUCLWEIGHT 1
 #define DIR_NUM 8
 
-#define REPELTHRESHOLD 0.5
-#define FEATDIM (59 + 27)
-#define GEODECISDIS 4.0
-#define DISTHRESHOLD 8.0
+#define REPELTHRESHOLD 0.5 // used for avoiding collision
+#define FEATDIM (59 + 27) //feature dimension
+#define GEODECISDIS 4.0 //length of the "spider leg"
+#define DISTHRESHOLD 6.0 // we don't want to match things too far away
 #define SIGMOIDSIGMA 1
 #define SIGMOIDALPHA 50
+#define SIMILARITY_SCALE 4
 
-#define STRETCH_MIU (YOUNG/2/(1+POISSON))
+#define STRETCH_MIU (YOUNG/2/(1+POISSON)) 
 #define STRETCH_LAMBDA (YOUNG*POISSON/(1+POISSON)/(1-2*POISSON))
 #define YOUNG 2
 #define POISSON 0.05
-#define REGWEIGHT 40
-#define BENDWEIGHT 200
-#define LINKWEIGHT 200
-#define BESTMATCH 500
+#define REGWEIGHT 20 //stretching weight
+#define BENDWEIGHT 10  //bending weight
+#define LINKWEIGHT 200  //structural links weight
 
 #define GPU_ON 0
 

@@ -161,8 +161,6 @@ void Mouse(int button, int state, int x, int y) //处理鼠标点击
 			color = CTSurface->meshColor.find(CTSurface->faceList[i].v3)->second;
 			CTSurface->faceList[i].color3 = getJetColor(color);
 		}
-
-
 	}
 
 	//draw RC affinity
@@ -390,6 +388,7 @@ void drawExtra(BasicMesh* mesh){
 	}
 
 	glColor3f(1,0,0);
+	
 	for (int i = 0; i < mesh->landmarkNum; i++){
 		Point_3 p = mesh->vertexIndex[mesh->landmark[i]]->point();
 
@@ -423,9 +422,9 @@ void drawSphere(GLfloat xx, GLfloat yy, GLfloat zz, GLfloat radius, GLfloat M, G
 			x[1] = radius * sin(angle_z + step_z) * cos(angle_xy);
 			y[1] = radius * sin(angle_z + step_z) * sin(angle_xy);
 			z[1] = radius * cos(angle_z + step_z);
-			x[2] = radius*sin(angle_z + step_z)*cos(angle_xy + step_xy);
-			y[2] = radius*sin(angle_z + step_z)*sin(angle_xy + step_xy);
-			z[2] = radius*cos(angle_z + step_z);
+			x[2] = radius * sin(angle_z + step_z) * cos(angle_xy + step_xy);
+			y[2] = radius * sin(angle_z + step_z) * sin(angle_xy + step_xy);
+			z[2] = radius * cos(angle_z + step_z);
 			x[3] = radius * sin(angle_z) * cos(angle_xy + step_xy);
 			y[3] = radius * sin(angle_z) * sin(angle_xy + step_xy);
 			z[3] = radius * cos(angle_z);

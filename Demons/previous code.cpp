@@ -1,5 +1,58 @@
 #include "stdafx.h"
+//select BESTMATCH correspondences
+	/*
+	for (int k = 0; k < BESTMATCH; k++){
+		float maxA = -1;
+		int maxI,maxJ;
+		for (int i = 0; i < affinityM; i++){
+			if (matchWeight[i] > 0.001) continue;
 
+			for (int j = 0; j < affinityN; j++)
+				if (VAL(affinity,i,j,affinityN) > maxA){
+					maxA = VAL(affinity,i,j,affinityN);
+					maxI = i;
+					maxJ = j;
+				}
+		}
+
+		bestMatch[maxI] = maxJ;
+		matchWeight[maxI] = VAL(affinity,maxI,maxJ,affinityN);
+
+		for (int i = 0; i < affinityM; i++)
+			VAL(affinity,i,maxJ,affinityN) = 0;
+
+	}
+	
+
+	meshColor.clear();
+	for (int i = 0; i < affinityM; i++)
+		if (matchWeight[i] > 0.00001){
+			meshColor.insert(pair<Vertex_const_handle,float>(vertexIndex[i],1));
+		}
+	
+	std::map<PolyhedralSurf::Vertex_const_handle, float>::iterator iter;
+
+	for (int i = 0; i < faceNum; i++){
+		iter = meshColor.find(faceList[i].v1);
+		if (iter != meshColor.end())
+			faceList[i].color1 = threeTuple(0,1,0);
+		else 
+			faceList[i].color1 = threeTuple(0.8,0.8,0.8);
+
+		iter = meshColor.find(faceList[i].v2);
+		if (iter != meshColor.end())
+			faceList[i].color2 = threeTuple(0,1,0);
+		else 
+			faceList[i].color2 = threeTuple(0.8,0.8,0.8);
+
+		iter = meshColor.find(faceList[i].v3);
+		if (iter != meshColor.end())
+			faceList[i].color3 = threeTuple(0,1,0);
+		else 
+			faceList[i].color3 = threeTuple(0.8,0.8,0.8);
+
+	}
+	*/
 /*test convex */
 // 		readOFF("temp1.off",tempU);
 // 		PolyhedralSurf::Vertex_const_iterator vb = RCSurface->P.vertices_begin();

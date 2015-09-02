@@ -7,7 +7,6 @@
 
 extern BasicMesh* CTSurface;
 extern BasicMesh* RCSurface;
-extern BasicMesh* DFSurface;
 
 extern float camera_Scale;
 extern float camera_Up;

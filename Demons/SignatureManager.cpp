@@ -7,6 +7,7 @@ namespace po = boost::program_options;
 
 #include <iostream>
 #include <fstream>
+#include <cstdlib>
 using namespace std;
 
 #include "MeshObject.h"
@@ -327,9 +328,13 @@ Vertex_const_handle BasicMesh::findVertexHandle(threeTuple a){
 	return vh;
 }
 
+/* construct geometric signature for one single vertex */
 signature* BasicMesh::constructSignature(Vertex_const_handle vh,double rotation){
 	signature* sig = new signature[dirNum + 1];
 
+	/* go along 8 directions and collect features at those end points */
+	
+	/*
 	for (int i = 0; i < dirNum; i++){
 		signature* temp = findSignature(i,vh,rotation);
 
@@ -341,6 +346,7 @@ signature* BasicMesh::constructSignature(Vertex_const_handle vh,double rotation)
 
 		sig[i+1] = *temp;
 	}
+	*/
 
 	float k1 = vertex2k1_map[vh];
 	float k2 = vertex2k2_map[vh];
@@ -359,6 +365,7 @@ signature* BasicMesh::constructSignature(Vertex_const_handle vh,double rotation)
 
 	sig[0].point = Vector_3(vh->point().x(),vh->point().y(),vh->point().z());
 
+	/*
 	for (int i = 1; i <= DIR_NUM; i++){
 		sig[i].deltaS = (sig[i].S - sig[0].S)/geodesicDistance;
 		sig[i].deltaN = abs(acos(sig[i].normal * sig[0].normal / sqrt(sig[i].normal.squared_length()*sig[0].normal.squared_length())))/geodesicDistance;
@@ -381,9 +388,11 @@ signature* BasicMesh::constructSignature(Vertex_const_handle vh,double rotation)
 	std::map<Vertex_const_handle, int>::iterator iter = indexMap.find(vh);
 
 	deleteMarchList();
+	*/
 	return sig;
 }
 
+/* compute geometric signatures for all vertices */
 void BasicMesh::findSignatureAll(){
 	PolyhedralSurf::Vertex_const_iterator vb = P.vertices_begin();
 	PolyhedralSurf::Vertex_const_iterator ve = P.vertices_end();
@@ -407,6 +416,38 @@ void BasicMesh::findSignatureAll(){
 	deleteMarchList();
 }
 
+void BasicMesh::outputFeatures(){
+	ofstream fout;
+	fout.open("features.txt");
+
+	fout<<vertexNum<<endl;
+
+	PolyhedralSurf::Vertex_const_iterator vb = P.vertices_begin();
+	PolyhedralSurf::Vertex_const_iterator ve = P.vertices_end();
+	PolyhedralSurf::Vertex_const_handle vh;
+	std::map<Vertex_const_handle, signature*>::iterator iterSig;
+	signature* sig;
+
+	for (int i = 0; vb != ve; vb++,i++){
+		vh = vb;
+
+		fout<<i+1<<' ';
+
+		Vector_3 d1 = vertex2d1_map[vh];
+		Vector_3 d2 = vertex2d2_map[vh];
+		Vector_3 normal = cross_product(d1,d2);
+
+		float k1 = vertex2k1_map[vh];
+		float k2 = vertex2k2_map[vh];
+		float K = k1*k2;
+		float H = (k1 + k2)/2;
+
+		fout<<normal<<' '<<K<<' '<<H<<endl;
+	}
+
+	fout.close();
+}
+
 void BasicMesh::deleteMarchList(){
 	for (int i = 0; i < 8; i++){
 		threeTuple* head = marchList[i];
@@ -428,6 +469,7 @@ void BasicMesh::deleteMarchList(){
 }
 
 float compareSignature(signature* sig1,signature* sig2){
+	/*
 	Eigen::VectorXd x1(FEATDIM);
 	Eigen::VectorXd x2(FEATDIM);
 
@@ -468,7 +510,13 @@ float compareSignature(signature* sig1,signature* sig2){
 	for (int i = 0; i < FEATDIM; i++)
 		ans += (x1(i)-x2(i))*(x1(i)-x2(i));
 	//cout<<"dif: "<<ans<<endl;
-	return ans;
+	*/
+	float dis1 = (sig1[0].normal - sig2[0].normal).squared_length();
+	float dis2 = (sig1[0].C - sig2[0].C) * (sig1[0].C - sig2[0].C);
+	float dis3 = (sig1[0].S - sig2[0].S) * (sig1[0].S - sig2[0].S);
+
+
+	return dis1 + dis2 + dis3;
 }
 
 void BasicMesh::findCorrespondenceBothWay(BasicMesh* secondMesh,double disWeight){
@@ -515,10 +563,11 @@ void BasicMesh::findCorrespondenceBothWay(BasicMesh* secondMesh,double disWeight
 
 			dif = compareSignature(sig1, sig2);
 
+			/*
 			rotateSig(sig1);
 			if (compareSignature(sig1, sig2) < dif)
 				dif = compareSignature(sig1, sig2);
-			
+			*/
 
 			dis = computeEuclideanDis(vh1->point(),vh2->point());
 
@@ -546,7 +595,7 @@ void BasicMesh::findCorrespondenceBothWay(BasicMesh* secondMesh,double disWeight
 			double scaledWeight;
 			
 			if (VAL(affinity,i,j,affinityN) >= 0)
-				scaledWeight = -VAL(affinity,i,j,affinityN)/8;
+				scaledWeight = -VAL(affinity,i,j,affinityN)/SIMILARITY_SCALE;
 			else 
 				scaledWeight = -101;
 
@@ -635,7 +684,7 @@ void BasicMesh::findMatch(BasicMesh* secondMesh){
 		
 /*		matchWeight[i] = sum;*/
 		if (sum > 2.5)
-			matchWeight[i] = 1 / (1 + exp(-0.5*(matchWeight[i]*100-60)));
+			matchWeight[i] = 1 / (1 + exp(-0.5*(matchWeight[i]*100-73)));
 		else
 			matchWeight[i] = 0;
 		
@@ -651,61 +700,57 @@ void BasicMesh::findMatch(BasicMesh* secondMesh){
 
 		matchWeight[i] = 0;
 	}
+}
 
-	//select BESTMATCH correspondences
-	/*
-	for (int k = 0; k < BESTMATCH; k++){
-		float maxA = -1;
-		int maxI,maxJ;
-		for (int i = 0; i < affinityM; i++){
-			if (matchWeight[i] > 0.001) continue;
+int compareNode (const void * a, const void * b)
+{
+	if ( ((qnode*)a)->value <  ((qnode*)b)->value ) return -1;
+	if ( ((qnode*)a)->value ==  ((qnode*)b)->value ) return 0;
+	if ( ((qnode*)a)->value >  ((qnode*)b)->value ) return 1;
+}
 
-			for (int j = 0; j < affinityN; j++)
-				if (VAL(affinity,i,j,affinityN) > maxA){
-					maxA = VAL(affinity,i,j,affinityN);
-					maxI = i;
-					maxJ = j;
-				}
-		}
-
-		bestMatch[maxI] = maxJ;
-		matchWeight[maxI] = VAL(affinity,maxI,maxJ,affinityN);
-
-		for (int i = 0; i < affinityM; i++)
-			VAL(affinity,i,maxJ,affinityN) = 0;
-
-	}
-	
-
-	meshColor.clear();
-	for (int i = 0; i < affinityM; i++)
-		if (matchWeight[i] > 0.00001){
-			meshColor.insert(pair<Vertex_const_handle,float>(vertexIndex[i],1));
+void BasicMesh::findMatch2(BasicMesh* secondMesh){
+	//use all correspondences
+	qnode* queue = new qnode[affinityM*affinityN];
+	for (int i = 0; i< affinityM; i++)
+		for (int j = 0; j < affinityN; j++){
+			queue[j+i*affinityN].value = VAL(affinity,i,j,affinityN);
+			queue[j+i*affinityN].i = i;
+			queue[j+i*affinityN].j = j;
 		}
 	
-	std::map<PolyhedralSurf::Vertex_const_handle, float>::iterator iter;
+	qsort(queue,affinityM*affinityN,sizeof(qnode),compareNode);
+	
+	bool* ibool = new bool[affinityM];
+	bool* jbool = new bool[affinityN];
+	memset(ibool,false,sizeof(bool)*affinityM);
+	memset(jbool,false,sizeof(bool)*affinityN);
 
-	for (int i = 0; i < faceNum; i++){
-		iter = meshColor.find(faceList[i].v1);
-		if (iter != meshColor.end())
-			faceList[i].color1 = threeTuple(0,1,0);
-		else 
-			faceList[i].color1 = threeTuple(0.8,0.8,0.8);
+	double maxWeight = 1;
+	/* first add these landmarks */
+	for (int k = 0; k < landmarkNum; k++){
+		ibool[landmark[k]] = true;
+		jbool[secondMesh->landmark[k]] = true;
 
-		iter = meshColor.find(faceList[i].v2);
-		if (iter != meshColor.end())
-			faceList[i].color2 = threeTuple(0,1,0);
-		else 
-			faceList[i].color2 = threeTuple(0.8,0.8,0.8);
-
-		iter = meshColor.find(faceList[i].v3);
-		if (iter != meshColor.end())
-			faceList[i].color3 = threeTuple(0,1,0);
-		else 
-			faceList[i].color3 = threeTuple(0.8,0.8,0.8);
-
+		matchWeight[landmark[k]] = maxWeight;
+		bestMatch[landmark[k]] = secondMesh->landmark[k];
 	}
-	*/
+
+	/* then use geometric feature to find some other correspondences */
+	for (int k = affinityM * affinityN-1; k >= 0; k--)
+		if (!ibool[queue[k].i] && !jbool[queue[k].j]){
+			ibool[queue[k].i] = true;
+			jbool[queue[k].j] = true;
+
+			matchWeight[queue[k].i] = queue[k].value * maxWeight;
+			bestMatch[queue[k].i] = queue[k].j;
+
+			if (queue[k].value < 0.2) break;
+		}
+	
+	delete[] queue;
+	delete[] ibool;
+	delete[] jbool;
 }
 
 void BasicMesh::findClosestPoint(BasicMesh* secondMesh){

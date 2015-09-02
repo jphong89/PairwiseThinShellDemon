@@ -18,6 +18,7 @@
 #include <Eigen/Dense>
 #include <Eigen/Eigenvalues>
 
+/* code borrowed from CGAL */
 typedef PolyhedralSurf::Traits          Kernel;
 typedef Kernel::FT                      FT;
 typedef Kernel::Point_3                 Point_3;
@@ -59,6 +60,7 @@ extern double bendweight;
 extern double regweight;
 extern float* matchWeight;
 
+/* MY OWN DATA STRUCTURE, WHICH IS QUITE USELESS NOW */
 struct threeTuple 
 {
 	float x;
@@ -94,21 +96,21 @@ struct threeTuple
 };
 
 struct facet{
-	threeTuple p1,p2,p3;
+	threeTuple p1,p2,p3; // VERTEX INFORMATION
 
-	threeTuple color1,color2,color3;
+	threeTuple color1,color2,color3; // VERTEX COLOR
 
-	threeTuple d1,d2;
+	threeTuple d1,d2; //PRINCIPAL DIRECTION
 
 	Vertex_const_handle v1,v2,v3;
-	Vertex_const_handle nb1,nb2,nb3;
-	double theta1,theta2,theta3;
-	double sideArea1,sideArea2,sideArea3;
-	double l1,l2,l3;
+	Vertex_const_handle nb1,nb2,nb3; // 3 NEIGHBOUR VERTICES
+	double theta1,theta2,theta3;	// 3 ANGLES (BETWEEN NEIGHBOUR FACETS)
+	double sideArea1,sideArea2,sideArea3;	//AREAS OF NEIGHBOUR FACETS
+	double l1,l2,l3; 
 
-	double SO1[2][2];
-	double SO2[2][2];
-	double SO3[2][2];
+	double SO1[2][2]; //  
+	double SO2[2][2]; //
+	double SO3[2][2]; //
 
 	Eigen::Matrix3d basis; 
 	int index[4];
@@ -118,10 +120,10 @@ struct facet{
 	Vector_2 local_v1,local_v2,local_v3;
 	Vector_2 t1,t2,t3;
 
-	double inverse[2][2];
-	double area;
+	double inverse[2][2]; //INVERSE OF STRETCHING TENSOR
+	double area; //FACET AREA
 
-	bool isBorder;
+	bool isBorder; // BORDER VERTEX?
 
 	threeTuple normal;
 };
@@ -260,10 +262,16 @@ struct vertex{
 	double area;
 };
 
+/* node in a queue , for qsort purpose */
+struct qnode{
+	float value;
+	int i,j;
+};
+
 class BasicMesh
 {
 public:
-	//create property maps, including
+	// cgal required para's
 	Vertex2FT_map vertex2k1_map, vertex2k2_map,
 		vertex2b0_map, vertex2b3_map,
 		vertex2P1_map, vertex2P2_map;
@@ -283,6 +291,7 @@ public:
 	bool verbose;
 	unsigned int min_nb_points;
 
+	/* data information */
 	string if_name;
 	string link_name;
 	string tag;
@@ -296,23 +305,32 @@ public:
 	Vertex_const_handle corresponding;
 
 public:
-	PolyhedralSurf P;
-	int ComputeMeshProperty(string if_name);
+	PolyhedralSurf P; //the surface, core structure
 
-private:
-	void translateMesh(Vertex2FT_property_map vertex2k1_pm,Vertex2FT_property_map vertex2k2_pm);
+public:
+	/* geometric feature */
+	int ComputeMeshProperty(string if_name);
+	void translateMesh(Vertex2FT_property_map vertex2k1_pm,Vertex2FT_property_map vertex2k2_pm); // compute facet information
 	void ComputeStretchInverse(Vertex_const_handle v1,Vertex_const_handle v2,Vertex_const_handle v3,facet* face);
 	void ComputeShapeOperator(facet* face);
 
-	Vertex_const_handle marchOnSurface(PolyhedralSurf::Halfedge_const_handle,PolyhedralSurf::Facet_const_handle,Vector_3,float,float,float,int,threeTuple*);
+	Vertex_const_handle marchOnSurface(PolyhedralSurf::Halfedge_const_handle,PolyhedralSurf::Facet_const_handle,Vector_3,float,float,float,int,threeTuple*); // geodesic marching
 	
 	void gather_fitting_points(Vertex_const_handle v,std::vector<Point_3> &in_points,Poly_rings& poly_rings);
 	void compute_differential_quantities(PolyhedralSurf& P, Poly_rings& poly_rings);
+	void deleteMarchList();
 
+	signature* findSignature(int dirOpt,Vertex_const_handle vh,double rotation = 0);
+	signature* constructSignature(Vertex_const_handle vh,double rotation = 0);
+	Vertex_const_handle findVertexHandle(threeTuple a);
+	void findSignatureAll();
+	void findClosestPoint(BasicMesh*);
+	void outputFeatures();
 public:
 	BasicMesh(string,string,string,string);
 	BasicMesh(){}
 
+	/* Prepare registration */
 	void constructVertexList();
 	void constructEdgeList();
 	void constructLink();
@@ -322,15 +340,10 @@ public:
 
 	/*REGISTRATION*/
 	void findCorrespondenceBothWay(BasicMesh*,double);
-	void findMatch(BasicMesh* secondMesh);
+	void findMatch(BasicMesh* secondMesh);  //from moving to static
+	void findMatch2(BasicMesh* secondMesh); //from static to moving
 
-	signature* findSignature(int dirOpt,Vertex_const_handle vh,double rotation = 0);
-	signature* constructSignature(Vertex_const_handle vh,double rotation = 0);
-	Vertex_const_handle findVertexHandle(threeTuple a);
-	void findSignatureAll();
-	void deleteMarchList();
-	void findClosestPoint(BasicMesh*);
-
+	/* surface information */
 	int faceNum;
 	int vertexNum;
 	int edgeNum;
@@ -338,12 +351,14 @@ public:
 	int linkNum;
 	int landmarkNum;
 
+	/* registration data structure */
 	Vertex_const_handle matched;
 	facet* faceList;
 	edge* edgeList;
 	vertex* vertexList;
 	int* landmark;
 
+	/* supporting data structure */
 	threeTuple* marchList[8];
 	std::map<Vertex_const_handle, signature*> signatureMap; 
 	std::map<Vertex_const_handle, int> indexMap;
@@ -352,6 +367,7 @@ public:
 	std::set<PolyhedralSurf::Facet_const_handle> vertexBool;
 };
 
+/* helper functions */
 Vector_3 projectVertex(Vector_3 d1,Vector_3 d2,Vector_3 edge);
 float compareSignature(signature* sig1,signature* sig2);
 Vector_3 rotate(Vector_3 dir,Vector_3 axis,double rotation);

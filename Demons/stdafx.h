@@ -17,25 +17,34 @@
 #define max_zenyo(a,b)            (((a) > (b)) ? (a) : (b))
 #define min_zenyo(a,b)            (((a) < (b)) ? (a) : (b))
 
-#define EUCLWEIGHT 1
+//#define EUCLWEIGHT 1
 #define DIR_NUM 8
 
-#define REPELTHRESHOLD 0.5 // used for avoiding collision
-#define FEATDIM (59 + 27) //feature dimension
-#define GEODECISDIS 4.0 //length of the "spider leg"
-#define DISTHRESHOLD 6.0 // we don't want to match things too far away
-#define SIGMOIDSIGMA 1
-#define SIGMOIDALPHA 50
-#define SIMILARITY_SCALE 4
+#define REPELTHRESHOLD 0.5 // inactive: used for avoiding collision
+#define FEATDIM (59 + 27) // inactive: feature dimens2ion
+#define GEODECISDIS 4.0 // inactive: length of the "spider leg"
+//#define DISTHRESHOLD 16.0 // we don't want to match things too far away
+#define SIGMOIDSIGMA 1 //inactive
+#define SIGMOIDALPHA 50 //inactive
+#define SIMILARITY_SCALE 4 //inactive
 
-#define STRETCH_MIU (YOUNG/2/(1+POISSON)) 
-#define STRETCH_LAMBDA (YOUNG*POISSON/(1+POISSON)/(1-2*POISSON))
-#define YOUNG 2
-#define POISSON 0.05
-#define REGWEIGHT 20 //stretching weight
-#define BENDWEIGHT 10  //bending weight
+#define STRETCH_MIU (YOUNG/2/(1+POISSON)) //inactive 
+#define STRETCH_LAMBDA (YOUNG*POISSON/(1+POISSON)/(1-2*POISSON)) //inactive
+//#define YOUNG 2
+//#define POISSON 0.05
+//#define REGWEIGHT 40 //stretching weight
+//#define BENDWEIGHT 200  //bending weight
 #define LINKWEIGHT 200  //structural links weight
 
 #define GPU_ON 0
+
+extern double YOUNG;
+extern double POISSON;
+extern double REGWEIGHT; //stretching weight
+extern double BENDWEIGHT;  //bending weight
+extern double DISTHRESHOLD; // we don't want to match things too far away
+extern double EUCLWEIGHT;
+extern int MESHLABOPTION;
+extern double LANDMARKWEIGHT;
 
 // TODO: reference additional headers your program requires here

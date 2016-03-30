@@ -511,15 +511,16 @@ float compareSignature(signature* sig1,signature* sig2){
 		ans += (x1(i)-x2(i))*(x1(i)-x2(i));
 	//cout<<"dif: "<<ans<<endl;
 	*/
+	
 	float dis1 = (sig1[0].normal - sig2[0].normal).squared_length();
 	float dis2 = (sig1[0].C - sig2[0].C) * (sig1[0].C - sig2[0].C);
 	float dis3 = (sig1[0].S - sig2[0].S) * (sig1[0].S - sig2[0].S);
 
 
-	return dis1 + dis2 + dis3;
+	return dis1 + dis2*5 + dis3*5;
 }
 
-void BasicMesh::findCorrespondenceBothWay(BasicMesh* secondMesh,double disWeight){
+void BasicMesh::findCorrespondenceBothWay(BasicMesh* secondMesh,double featWeight){
 	PolyhedralSurf::Vertex_const_iterator vb = secondMesh->P.vertices_begin();
 	PolyhedralSurf::Vertex_const_iterator ve = secondMesh->P.vertices_end();
 	PolyhedralSurf::Vertex_const_handle vh1,vh2;
@@ -570,17 +571,12 @@ void BasicMesh::findCorrespondenceBothWay(BasicMesh* secondMesh,double disWeight
 			*/
 
 			dis = computeEuclideanDis(vh1->point(),vh2->point());
-
-			double disT = SIGMOIDALPHA / (1 + exp(-SIGMOIDSIGMA*(dis-DISTHRESHOLD)));
-
-			if (disT > SIGMOIDALPHA - 20) continue;
+			if (dis > DISTHRESHOLD) continue;
 
 			float theta = acos(sig1->normal*sig2->normal/sqrt(sig1->normal.squared_length()*sig2->normal.squared_length()));
-			double normalDifT = SIGMOIDALPHA / (1 + exp(-20*(theta-0.8)));
+			if (theta  > PI/2 * 0.8) continue;
 
-			if (normalDifT > SIGMOIDALPHA - 20) continue;
-
-			dif = dif * (EUCLWEIGHT - disWeight) + dis * EUCLWEIGHT;
+			dif = dif * featWeight + dis;
 
 			VAL(affinity,i,j,affinityN) = dif;
 			VAL(featDis,i,j,affinityN) = dif;
@@ -589,6 +585,7 @@ void BasicMesh::findCorrespondenceBothWay(BasicMesh* secondMesh,double disWeight
 
 	//optional affinity
 	
+	/*
 	for (int i = 0; i < affinityM; i++){
 
 		for (int j = 0; j < affinityN; j++){
@@ -606,13 +603,12 @@ void BasicMesh::findCorrespondenceBothWay(BasicMesh* secondMesh,double disWeight
 		}
 		
 	}		
-	
-	/*
-	for (int i = 0; i < affinityM; i++){
-		float minA = 1000;
-		float maxA = 0;
+	*/
+	float minA = 1000;
+	float maxA = 0;
 
-		float temp;
+	float temp;
+	for (int i = 0; i < affinityM; i++){
 		for (int j = 0; j < affinityN; j++){
 			temp = VAL(affinity,i,j,affinityN);
 			if (temp >= 0){
@@ -620,17 +616,20 @@ void BasicMesh::findCorrespondenceBothWay(BasicMesh* secondMesh,double disWeight
 				if (temp < minA) minA = temp;
 			}
 		}
+	}
 
+	for (int i = 0; i < affinityM; i++){
 		for (int j = 0; j < affinityN; j++){
 			temp = VAL(affinity,i,j,affinityN);
 			if (temp >= 0)
-				VAL(affinity,i,j,affinityN) = (temp - minA) / (maxA - minA) * GEOAFFINITYWEIGHT;
+				VAL(affinity,i,j,affinityN) = 1-(temp - minA) / (maxA - minA);
 			else
-				VAL(affinity,i,j,affinityN) = GEOAFFINITYWEIGHT;
+				VAL(affinity,i,j,affinityN) = 0;
 			
 		}
 	}
 
+	/*
 	for (int j = 0; j < affinityN; j++){
 		float minA = 1000;
 		float maxA = 0;
@@ -743,6 +742,7 @@ void BasicMesh::findMatch2(BasicMesh* secondMesh){
 			jbool[queue[k].j] = true;
 
 			matchWeight[queue[k].i] = queue[k].value * maxWeight;
+			//matchWeight[queue[k].i] = 0.8;
 			bestMatch[queue[k].i] = queue[k].j;
 
 			if (queue[k].value < 0.2) break;

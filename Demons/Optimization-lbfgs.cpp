@@ -5,6 +5,8 @@
 #include <fstream>
 using namespace std;
 
+double* tempG;
+double* tempS;
 
 static int progress(
 	void *instance,
@@ -34,6 +36,7 @@ static int progress(
 		QueryPerformanceCounter(&t2);
 		cout<<"Time Elapse:"<<(t2.QuadPart - t1.QuadPart)*1.0/tc.QuadPart * 1000<<endl;
 		cout<<endl;
+		t1 = t2;
 	}
 	pthread_mutex_unlock(&lock);
 	return 0;
@@ -89,13 +92,20 @@ void *startOptimization(void * arg){
 
 	int ret;
 	lbfgsfloatval_t *tempU = new lbfgsfloatval_t[affinityM*3];
+	tempG = new double[RCSurface->faceNum*9];
+	tempS  = new double[RCSurface->faceNum];
+	memset(tempS,0,sizeof(double)*RCSurface->faceNum);
+	memset(tempG,0,sizeof(double)*RCSurface->faceNum*9);
 	memset(tempU,0,sizeof(lbfgsfloatval_t) * affinityM * 3);
+
+// 	omp_set_dynamic(0);
+// 	omp_set_num_threads(2);
 
 	double bestError = 100000;
 	regweight = REGWEIGHT;
 	bendweight = BENDWEIGHT;
 
-	for (int i = 0; i < 10; i++){
+	for (int i = 0; i < 19; i++){
 		cout<<"Velocity Iteration: "<<i<<endl;
 
 		if (i > 0){
@@ -118,7 +128,7 @@ void *startOptimization(void * arg){
 			RCSurface->constructEdgeList();
 			//RCSurface->constructLink();
 			RCSurface->constructVertexList();
-			RCSurface->findCorrespondenceBothWay(CTSurface,0.9/*min_zenyo(i * 0.13,1)*/);
+			RCSurface->findCorrespondenceBothWay(CTSurface,EUCLWEIGHT);
 			cout<<"Recompute affinity map..."<<endl;
 			RCSurface->findMatch2(CTSurface);
 			//RCSurface->findClosestPoint(CTSurface);
@@ -126,7 +136,7 @@ void *startOptimization(void * arg){
 
 		cout<<"Begin optimization..."<<endl;    /* actual registration (optimization) */
 
-		int opIterNum = 80000;
+		int opIterNum = 20000;
 
 		lbfgs_parameter_t param;
 		ret = 0;
@@ -157,15 +167,16 @@ void *startOptimization(void * arg){
 		writeOFF(RCSurface,filename);
 
 		cout<<"L-BFGS optimization terminated with status code: "<<ret<<"fx: "<<fx<<endl;
-		//if (i % 3 == 0) cin>>ret;
-		if ((i % 4 == 1)&&(i != 1)) {
+
+		if ((MESHLABOPTION > 0) && (i % MESHLABOPTION == 0) && (i > 0)) {
 			char cmdLine[100];
 			sprintf(cmdLine,"meshlabserver -i %s -o %s -s meshlabscript_demons.mlx\n",filename,filename);
 			system(cmdLine);
 		}
 		
-		regweight *= 0.975;
+		regweight *= 0.95;
 		bendweight *= 0.95;
+		//EUCLWEIGHT *= 0.9;
 	}
 
 	//final iteration evaluation
@@ -193,7 +204,7 @@ static lbfgsfloatval_t evaluate(
 	/* bending */
 	double bending = penalizeBendQuadratic(u,g);
 	//double bending = 0;
-	//double landmark = penalizaeLandmark(u,g);
+	double landmark = penalizaeLandmark(u,g);
 
  	//double linkStretching = penalizeLink(u,g);
 // 	double linkStretching = 0;
@@ -213,7 +224,7 @@ static lbfgsfloatval_t evaluate(
 // 		linkStretching += LINKWEIGHT * deformVec.squared_length();
 // 	}
 	pthread_mutex_unlock(&lock);
-	return data + stretching +  bending /*+landmark + linkStretching*/;
+	return data + stretching +  bending +landmark /*+ linkStretching*/;
 }
 
 lbfgsfloatval_t penalizeData(const lbfgsfloatval_t *u, lbfgsfloatval_t *g){
@@ -223,7 +234,9 @@ lbfgsfloatval_t penalizeData(const lbfgsfloatval_t *u, lbfgsfloatval_t *g){
 
 	lbfgsfloatval_t fx = 0.0;
 
-	for (int i = 0; vb != ve; vb++,i++){
+	int i = 0;
+	//#pragma omp parallel for private(i)
+	for (i = 0; vb != ve; vb++,i++){
 		vh = vb;
 
 		if (occluded[i]){
@@ -275,84 +288,100 @@ lbfgsfloatval_t penalizeStretch(const lbfgsfloatval_t *u, lbfgsfloatval_t *g){
 	}else{ //triangle-based stretching energy
 		facet* faceList = RCSurface->faceList;
 
-		double Dtemp_v1_x,Dtemp_v1_y,Dtemp_v1_z;
-		double Dtemp_v2_x,Dtemp_v2_y,Dtemp_v2_z;
+// 		double Dtemp_v1_x,Dtemp_v1_y,Dtemp_v1_z;
+// 		double Dtemp_v2_x,Dtemp_v2_y,Dtemp_v2_z;
+// 
+// 		Point_3 newV1,newV2,newV3;
+// 		Vector_3 temp_v1,temp_v2;
+// 		double v11,v12,v21,v22,J11,J12,J21,J22,S11,S12,S21,S22,k;
+// 		double Dv11,Dv12,Dv21,Dv22,DJ11,DJ12,DJ21,DJ22,DS11,DS12,DS21,DS22,dk;
+// 		double weight,trace,trace_2,det,det_inv,Ddet;
 
-		Point_3 newV1,newV2,newV3;
-		Vector_3 temp_v1,temp_v2;
-		double v11,v12,v21,v22,J11,J12,J21,J22,S11,S12,S21,S22,k;
-		double Dv11,Dv12,Dv21,Dv22,DJ11,DJ12,DJ21,DJ22,DS11,DS12,DS21,DS22,dk;
-		double weight,trace,trace_2,det,det_inv,Ddet;
-
-		for (int idx=0; idx < RCSurface->faceNum;idx++){
+		int idx;
+		//#pragma omp parallel for private(idx)
+		for ( idx=0; idx < RCSurface->faceNum;idx++){
 			facet f = faceList[idx];
-			weight = f.area * regweight;
+			double weight = f.area * regweight;
 
-			newV1 = f.v1->point() + Vector_3(u[f.index[1]*3],u[f.index[1]*3+1],u[f.index[1]*3+2]);
-			newV2 = f.v2->point() + Vector_3(u[f.index[2]*3],u[f.index[2]*3+1],u[f.index[2]*3+2]);
-			newV3 = f.v3->point() + Vector_3(u[f.index[3]*3],u[f.index[3]*3+1],u[f.index[3]*3+2]);
+			Point_3 newV1 = f.v1->point() + Vector_3(u[f.index[1]*3],u[f.index[1]*3+1],u[f.index[1]*3+2]);
+			Point_3 newV2 = f.v2->point() + Vector_3(u[f.index[2]*3],u[f.index[2]*3+1],u[f.index[2]*3+2]);
+			Point_3 newV3 = f.v3->point() + Vector_3(u[f.index[3]*3],u[f.index[3]*3+1],u[f.index[3]*3+2]);
 
-			temp_v1 = Vector_3(newV1,newV2);
-			temp_v2 = Vector_3(newV1,newV3);
+			Vector_3 temp_v1 = Vector_3(newV1,newV2);
+			Vector_3 temp_v2 = Vector_3(newV1,newV3);
 
-			v11 = 0;
-			v12 = sqrt(temp_v1.squared_length()+EPS);
+			double v11 = 0;
+			double v12 = sqrt(temp_v1.squared_length()+EPS);
 
-			k = temp_v1*temp_v2;
-			v22 = k / v12;
+			double k = temp_v1*temp_v2;
+			double v22 = k / v12;
 
 			double sqv21 = temp_v2.squared_length() - v22*v22;
 
-			v21 = - sqrt(sqv21+EPS);
+			double v21 = - sqrt(sqv21+EPS);
 
-			J11 = 0*f.inverse[0][0] + v21*f.inverse[1][0];
-			J12 = 0*f.inverse[0][1] + v21*f.inverse[1][1];
-			J21 = v12*f.inverse[0][0] + v22*f.inverse[1][0];
-			J22 = v12*f.inverse[0][1] + v22*f.inverse[1][1];
+			double J11 = 0*f.inverse[0][0] + v21*f.inverse[1][0];
+			double J12 = 0*f.inverse[0][1] + v21*f.inverse[1][1];
+			double J21 = v12*f.inverse[0][0] + v22*f.inverse[1][0];
+			double J22 = v12*f.inverse[0][1] + v22*f.inverse[1][1];
 
-			S11 = J11*J11 + J21*J21; S12 = J11*J12+J21*J22; S21 = S12; S22 = J12*J12 + J22*J22;
-			trace = (S11 + S22 - 2);
+			double S11 = J11*J11 + J21*J21; double S12 = J11*J12+J21*J22; double S21 = S12; double S22 = J12*J12 + J22*J22;
+			double trace = (S11 + S22 - 2);
 			
 			//det = S11*S22 - S12*S21;
 			//det_inv = 1 / det;
-			trace_2 = (S11-1)*(S11-1) + 2*S12*S21 + (S22-1)*(S22-1);
+			double trace_2 = 0.5*(S11-1)*(S11-1) + 4*S12*S21 + 0.5*(S22-1)*(S22-1);
 
 			//stretching += weight * (STRETCH_MIU / 2 * trace + (STRETCH_LAMBDA - STRETCH_MIU*2)/8 * det + (STRETCH_LAMBDA + STRETCH_MIU*2)/8 * det_inv);
-			stretching += weight *YOUNG/2/(1-POISSON*POISSON)*((1-POISSON)*trace_2+POISSON*trace*trace);
+			//stretching += weight *YOUNG/2/(1-POISSON*POISSON)*((1-POISSON)*trace_2+POISSON*trace*trace);
+			tempS[idx] = weight *YOUNG/2/(1-POISSON*POISSON)*((1-POISSON)*trace_2+POISSON*trace*trace);
+
+			//cout<<"complete 1.1 single energy computing"<<endl;
 
 			/* COMPUTE GRADIENT */
 			for (int i = 1; i < 4; i++)
 				for (int j = 1; j < 4; j++){
-					Dtemp_v1_x = computeStretchGradient(1,1,i,j);Dtemp_v1_y = computeStretchGradient(1,2,i,j);Dtemp_v1_z = computeStretchGradient(1,3,i,j);
-					Dtemp_v2_x = computeStretchGradient(2,1,i,j);Dtemp_v2_y = computeStretchGradient(2,2,i,j);Dtemp_v2_z = computeStretchGradient(2,3,i,j);
+					double Dtemp_v1_x = computeStretchGradient(1,1,i,j);double Dtemp_v1_y = computeStretchGradient(1,2,i,j);double Dtemp_v1_z = computeStretchGradient(1,3,i,j);
+					double Dtemp_v2_x = computeStretchGradient(2,1,i,j);double Dtemp_v2_y = computeStretchGradient(2,2,i,j);double Dtemp_v2_z = computeStretchGradient(2,3,i,j);
 
-					dk = (Dtemp_v1_x*temp_v2.x()  +temp_v1.x()*Dtemp_v2_x) + (Dtemp_v1_y*temp_v2.y()  +temp_v1.y()*Dtemp_v2_y) + (Dtemp_v1_z*temp_v2.z()  +temp_v1.z()*Dtemp_v2_z);
-					Dv12 = 0.5 * 1 / v12 * (2*temp_v1.x()*Dtemp_v1_x + 2*temp_v1.y()*Dtemp_v1_y + 2*temp_v1.z()*Dtemp_v1_z);
-					Dv22 = (dk * v12 - Dv12 * k) / (v12*v12);
-					Dv21 = 0.5 * 1 / v21 * (2*temp_v2.x()*Dtemp_v2_x + 2*temp_v2.y()*Dtemp_v2_y + 2*temp_v2.z()*Dtemp_v2_z - 2*v22*Dv22);
+					double dk = (Dtemp_v1_x*temp_v2.x()  +temp_v1.x()*Dtemp_v2_x) + (Dtemp_v1_y*temp_v2.y()  +temp_v1.y()*Dtemp_v2_y) + (Dtemp_v1_z*temp_v2.z()  +temp_v1.z()*Dtemp_v2_z);
+					double Dv12 = 0.5 * 1 / v12 * (2*temp_v1.x()*Dtemp_v1_x + 2*temp_v1.y()*Dtemp_v1_y + 2*temp_v1.z()*Dtemp_v1_z);
+					double Dv22 = (dk * v12 - Dv12 * k) / (v12*v12);
+					double Dv21 = 0.5 * 1 / v21 * (2*temp_v2.x()*Dtemp_v2_x + 2*temp_v2.y()*Dtemp_v2_y + 2*temp_v2.z()*Dtemp_v2_z - 2*v22*Dv22);
 
-					DJ11 = Dv21*f.inverse[1][0];
-					DJ12 = Dv21*f.inverse[1][1];
-					DJ21 = Dv12*f.inverse[0][0] + Dv22*f.inverse[1][0];
-					DJ22 = Dv12*f.inverse[0][1] + Dv22*f.inverse[1][1];
+					double DJ11 = Dv21*f.inverse[1][0];
+					double DJ12 = Dv21*f.inverse[1][1];
+					double DJ21 = Dv12*f.inverse[0][0] + Dv22*f.inverse[1][0];
+					double DJ22 = Dv12*f.inverse[0][1] + Dv22*f.inverse[1][1];
 
-					DS11 = 2*J11*DJ11 + 2*J21*DJ21;
-					DS22 = 2*J12*DJ12 + 2*J22*DJ22;
-					DS12 = (DJ11*J12+J11*DJ12) + (DJ21*J22+J21*DJ22);
-					DS21 = DS12;
+					double DS11 = 2*J11*DJ11 + 2*J21*DJ21;
+					double DS22 = 2*J12*DJ12 + 2*J22*DJ22;
+					double DS12 = (DJ11*J12+J11*DJ12) + (DJ21*J22+J21*DJ22);
+					double DS21 = DS12;
 
 					//Ddet = (DS11*S22+S11*DS22) - (DS12*S21+S12*DS21);
 
 					//g[f.index[i]*3+j-1] += weight * STRETCH_MIU / 2 * (DS11 + DS22);
 					//g[f.index[i]*3+j-1] += weight * (STRETCH_LAMBDA - STRETCH_MIU*2)/8 * Ddet;
 					//g[f.index[i]*3+j-1] += weight * (STRETCH_LAMBDA + STRETCH_MIU*2)/8 * (-1/(det*det)*Ddet);
-					g[f.index[i]*3+j-1] += weight *YOUNG/2/(1-POISSON*POISSON)*
-						((1-POISSON)*(2*(S11-1)*DS11+2*S12*DS21+2*DS12*S21+2*(S22-1)*DS22)+
-						 POISSON*2*trace*(DS11+DS22));
+					
+// 					g[f.index[i]*3+j-1] += weight *YOUNG/2/(1-POISSON*POISSON)*
+// 						((1-POISSON)*(1*(S11-1)*DS11+4*S12*DS21+4*DS12*S21+1*(S22-1)*DS22)+
+// 						 POISSON*2*trace*(DS11+DS22));
+					tempG[idx*9+(i-1)*3+j-1] = weight *YOUNG/2/(1-POISSON*POISSON)*
+						 					   ((1-POISSON)*(1*(S11-1)*DS11+4*S12*DS21+4*DS12*S21+1*(S22-1)*DS22)+
+						    				   POISSON*2*trace*(DS11+DS22));
 				}
 
 
 		}
+
+		for (int idx=0; idx < RCSurface->faceNum;idx++){
+			stretching += tempS[idx];
+			for (int i = 1; i < 4; i++)
+				for (int j = 1; j < 4; j++)
+					g[faceList[idx].index[i]*3+j-1] += tempG[idx*9+(i-1)*3+j-1];
+		}	
 	}
 
 	facetStretching = stretching;
@@ -579,7 +608,7 @@ lbfgsfloatval_t penalizeLink(const lbfgsfloatval_t *u, lbfgsfloatval_t *g){
 
 lbfgsfloatval_t penalizaeLandmark(const lbfgsfloatval_t *u, lbfgsfloatval_t *g){
 	PolyhedralSurf::Vertex_const_handle vh;
-	double weight = 20;
+	double weight = LANDMARKWEIGHT;
 
 	lbfgsfloatval_t fx = 0.0;
 	for (int i = 0; i<RCSurface->landmarkNum; i++){

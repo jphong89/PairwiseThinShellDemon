@@ -197,11 +197,20 @@ int BasicMesh::ComputeMeshProperty(string filename){
 	PolyhedralSurf::Vertex_const_iterator ve = P.vertices_end();
 	PolyhedralSurf::Vertex_const_handle vh,minh;
 
+	ofstream fout;
+	fout.open(if_name+"curvature.txt");
 	for (int i = 0; vb != ve; vb++,i++){
 		vh = vb;
 		indexMap.insert(pair<Vertex_const_handle,int>(vh,i));
 		vertexIndex[i] = vh;
+
+		float k1 = vertex2k1_map[vh];
+		float k2 = vertex2k2_map[vh];
+
+		float k = sqrt(k1*k1+k2*k2);
+		fout<<k<<endl;
 	}
+	fout.close();
 	
 	/* translate surfaces (per faceet) */
 	translateMesh(vertex2k1_pm,vertex2k2_pm);

@@ -14,6 +14,16 @@ using namespace std;
 char* patientNum;
 char* caseNum;
 
+/* registration params */
+double YOUNG = 2;
+double POISSON = 0.05;
+double REGWEIGHT = 40; //stretching weight
+double BENDWEIGHT = 400;  //bending weight
+double DISTHRESHOLD = 12.0; // we don't want to match things too far away
+double EUCLWEIGHT = 1;
+int MESHLABOPTION = 1;
+double LANDMARKWEIGHT = 50;
+
 /* the two surfaces we want to register. note!! the variable name doesn't reflect if it's CT or RC */
 BasicMesh* CTSurface;
 BasicMesh* RCSurface;
@@ -114,21 +124,43 @@ int main(int argc, char* argv[])
 {
 	char* filename1;
 	char* filename2;
-	char* filename3; //currently not in use
-	char* filename4; //landmark1
-	char* filename5; //landmark2
+	char* landmark1; //landmark1
+	char* landmark2; //landmark2
 
 	//format: demons.exe surface1.off surface2.off weight_output.txt landmark1.txt landmark2.txt
 	if (argc > 2){
 		filename1 = argv[1];
 		filename2 = argv[2];
 		
-		if (argc > 3) filename3 = argv[3];
-		if (argc > 4) filename4 = argv[4];
-		if (argc > 5) filename5 = argv[5];
+		if (argc > 3) {
+			REGWEIGHT = atof(argv[3]);
+			BENDWEIGHT = atof(argv[4]);
+		}
+
+		if (argc > 5) DISTHRESHOLD = atof(argv[5]);
+		if (argc > 6) EUCLWEIGHT = atof(argv[6]);
+		
+		if (argc > 7) {
+			YOUNG = atof(argv[7]);
+			POISSON = atof(argv[8]);
+		}
+
+		if (argc > 9) {
+			MESHLABOPTION = atoi(argv[9]);
+		}
+
+		if (argc > 10) {
+			landmark1 = argv[10];
+			landmark2 = argv[11];
+			LANDMARKWEIGHT = atof(argv[12]);
+		}
 
 		patientNum = new char[20]; //manually designate object name
 		caseNum = new char[20];	//manually designate case number
+
+		cout<<"STRETCHING WEIGHT: "<<REGWEIGHT<<" -BENDING WEIGHT: "<<BENDWEIGHT<<" -EUCLIDEAN THRESHOLD: "
+			<<DISTHRESHOLD<<" -GEOMETRIC FEATURE WEIGHT: "<<EUCLWEIGHT
+			<<" -YOUNG: "<<YOUNG<<" -POSSION: "<<POISSON<<" -MESHLAB: "<<MESHLABOPTION<<endl;
 	}else{
 		patientNum = new char[20]; //manully designate object name
 		caseNum = new char[20];
@@ -153,12 +185,12 @@ int main(int argc, char* argv[])
 	cout<<"Begin Constructing First Mesh: "<<filename1<<endl;
 	RCSurface = new BasicMesh(filename1,"origin",patientNum,caseNum);
 	RCSurface->ComputeMeshProperty(filename1);
-	RCSurface->constructLandmark(filename4);
+	if (argc > 10) RCSurface->constructLandmark(landmark1);
 
 	cout<<"Begin Construction Second Mesh: "<<filename2<<endl;
 	CTSurface = new BasicMesh(filename2,"deformed",patientNum,caseNum);
 	CTSurface->ComputeMeshProperty(filename2);
-	CTSurface->constructLandmark(filename5);
+	if (argc > 10) CTSurface->constructLandmark(landmark2);
 
 	affinityM = RCSurface->vertexNum;
 	affinityN = CTSurface->vertexNum;
@@ -185,8 +217,8 @@ int main(int argc, char* argv[])
 	RCSurface->constructEdgeList();
 	RCSurface->constructVertexList();
 
-	/////////////////////////////* compute correspondences for registration *////////////////////////////////////////////////////////////
-	RCSurface->findCorrespondenceBothWay(CTSurface,0.5);
+	/////////////////////////////* 3compute correspondences for registration *////////////////////////////////////////////////////////////
+	RCSurface->findCorrespondenceBothWay(CTSurface,EUCLWEIGHT);
 	RCSurface->findMatch2(CTSurface);
 
 	/* output force weight */
@@ -197,7 +229,7 @@ int main(int argc, char* argv[])
 	//RCSurface->findClosestPoint(CTSurface);
 
 	/////////////////////////////* rendering and optimization *////////////////////////////////////////////////////////////
-	beginGlut(argc,argv);
+// 	beginGlut(argc,argv);
 	if (pthread_mutex_init(&lock, NULL) != 0)
 	{
 		cout<<"mutex init failed\n"<<endl;

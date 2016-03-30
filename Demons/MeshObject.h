@@ -182,10 +182,10 @@ struct signature{
 		deltaS = 0;
 		deltaN = 0;
 
-		deltaN12 = 0;
-		deltaN34 = 0;
+		deltaN12 = 0; //normal between v1 v2
+		deltaN34 = 0; //normal between v3 v4
 
-		dis12 = 0;
+		dis12 = 0;	//euc dis between v1 v2
 		dis34 = 0;
 		dis56 = 0;
 		dis78 = 0;
@@ -339,7 +339,7 @@ public:
 	void constructLandmark(string filename);
 
 	/*REGISTRATION*/
-	void findCorrespondenceBothWay(BasicMesh*,double);
+	void findCorrespondenceBothWay(BasicMesh*,double); //compute feature similarity based on euc dis & curvatures3
 	void findMatch(BasicMesh* secondMesh);  //from moving to static
 	void findMatch2(BasicMesh* secondMesh); //from static to moving
 

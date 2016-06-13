@@ -552,3 +552,72 @@ return bending;
 // 		fout.close();
 // 	}
 // }
+
+// double computeAngleGradient(int i,int j,Point_3 V1,Point_3 V2,Point_3 V3,Point_3 V4){
+// 	Vector_3 v1(V1,V4);
+// 	Vector_3 v2(V1,V2);
+// 	Vector_3 v3(V1,V3);
+// 
+// 	Vector_3 n2 = cross_product(v2,v3);
+// 	double sm2 = n2.squared_length();
+// 	double sq2 = sqrt(sm2);
+// 	double p1 = v1*n2;
+// 	double dis1 = p1/sq2;
+// 
+// 	double v1v2 = v1*v2;
+// 	double sqv2 = sqrt(v2.squared_length());
+// 	double p2 = v1v2/sqv2;
+// 	double dis2 = sqrt(v1.squared_length()-p2*p2);
+// 
+// 	/* gradient */
+// 
+// 	double dn2x,dn2y,dn2z,dsm2,dsq2,dp1,ddis1,dtheta,dsv2,dsqv2,dv1v2,dp2,ddis2;
+// 	double dv1x,dv1y,dv1z,dv2x,dv2y,dv2z,dv3x,dv3y,dv3z;
+// 
+// 	dv1x = computeGradient(1,1,i,j);dv1y = computeGradient(1,2,i,j); dv1z = computeGradient(1,3,i,j);
+// 	dv2x = computeGradient(2,1,i,j);dv2y = computeGradient(2,2,i,j); dv2z = computeGradient(2,3,i,j);
+// 	dv3x = computeGradient(3,1,i,j);dv3y = computeGradient(3,2,i,j); dv3z = computeGradient(3,3,i,j);
+// 
+// 	dn2x = (dv2y*v3.z()+v2.y()*dv3z)-(dv2z*v3.y()+v2.z()*dv3y);
+// 	dn2y = (dv2z*v3.x()+v2.z()*dv3x)-(dv2x*v3.z()+v2.x()*dv3z);
+// 	dn2z = (dv2x*v3.y()+v2.x()*dv3y)-(dv2y*v3.x()+v2.y()*dv3x);
+// 
+// 	dsm2 = 2*n2.x()*dn2x + 2*n2.y()*dn2y + 2*n2.z()*dn2z;
+// 	dsq2 = 0.5 * 1 / sq2 * dsm2;
+// 
+// 	dp1 = (dv1x*n2.x()+v1.x()*dn2x) + (dv1y*n2.y()+v1.y()*dn2y) + (dv1z*n2.z()+v1.z()*dn2z);
+// 	ddis1 = (dp1*sq2-p1*dsq2)/(sq2*sq2);
+// 	
+// 	//
+// 	dsv2 = 2*v2.x()*dv2x + 2*v2.y()*dv2y + 2*v2.z()*dv2z;
+// 	dsqv2 = 0.5 * 1 / sqv2 * dsv2;
+// 
+// 	dv1v2 = (dv1x*v2.x()+v1.x()*dv2x) + (dv1y*v2.y()+v1.y()*dv2y) + (dv1z*v2.z()+v1.z()*dv2z);
+// 	dp2 = (dv1v2*sqv2 - v1v2*dsqv2)/v2.squared_length();
+// 
+// 	ddis2 = 0.5 * 1 / dis2 *(2*v1.x()*dv1x + 2*v1.y()*dv1y + 2*v1.z()*dv1z-2*p2*dp2);
+// 
+// 	return (ddis1*dis2-dis1*ddis2)/(dis2*dis2);
+// }
+// 
+// double computeGradient(int n,int nd,int e,int ed){
+// 	if (nd != ed) return 0;
+// 
+// 	if (n == 1){
+// 		if (e == 1) return -1;
+// 		else if (e == 4) return 1;
+// 		else return 0;
+// 	}
+// 	else if (n == 2){
+// 		if (e == 1) return -1;
+// 		else if (e == 2) return 1;
+// 		else return 0;
+// 	}
+// 	else if (n == 3){
+// 		if (e == 1) return -1;
+// 		else if (e == 3) return 1;
+// 		else return 0;
+// 	}
+// 
+// 	return 0;
+// }

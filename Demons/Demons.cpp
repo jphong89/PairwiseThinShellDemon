@@ -23,6 +23,7 @@ double DISTHRESHOLD = 12.0; // we don't want to match things too far away
 double EUCLWEIGHT = 1;
 int MESHLABOPTION = 1;
 double LANDMARKWEIGHT = 50;
+bool is_orthotropic = false;
 
 /* the two surfaces we want to register. note!! the variable name doesn't reflect if it's CT or RC */
 BasicMesh* CTSurface;
@@ -36,7 +37,7 @@ bool* occluded;
 
 /* registration variables */
 double* affinity;
-int* bestMatch;
+Vector_3* bestMatch;
 float* matchWeight;
 int affinityM = 0;
 int affinityN = 0;
@@ -93,8 +94,8 @@ void initialMemeoryForGlobalVariables(){
 	affinity = new double[affinityM * affinityN];
 	memset(affinity,0,affinityM * affinityN * sizeof(double));
 	//initial best match location
-	bestMatch = new int[affinityM];
-	memset(bestMatch,0,sizeof(int)*affinityM);
+	bestMatch = new Vector_3[affinityM];
+	for (int i = 0; i < affinityM; i++) bestMatch[i]=Vector_3(0,0,0);	
 	//initial match confidence
 	matchWeight = new float[affinityM];
 	memset(matchWeight,0,sizeof(float)*affinityM);
@@ -143,6 +144,7 @@ int main(int argc, char* argv[])
 		if (argc > 7) {
 			YOUNG = atof(argv[7]);
 			POISSON = atof(argv[8]);
+			if (YOUNG < 0 || POISSON < 0) is_orthotropic = true;
 		}
 
 		if (argc > 9) {
@@ -186,7 +188,11 @@ int main(int argc, char* argv[])
 	RCSurface = new BasicMesh(filename1,"origin",patientNum,caseNum);
 	RCSurface->ComputeMeshProperty(filename1);
 	if (argc > 10) RCSurface->constructLandmark(landmark1);
-
+	if (is_orthotropic){
+		cout<<"computing orthotropic case..."<<endl;
+		RCSurface->constructOrthotropic(); 
+	
+	}
 	cout<<"Begin Construction Second Mesh: "<<filename2<<endl;
 	CTSurface = new BasicMesh(filename2,"deformed",patientNum,caseNum);
 	CTSurface->ComputeMeshProperty(filename2);
@@ -200,7 +206,6 @@ int main(int argc, char* argv[])
 
 	cout<<"Begin Computing Geometric Features for First Mesh..."<<endl;
 	RCSurface->findSignatureAll();
-	//RCSurface->outputFeatures();
 	cout<<"Begin Computing Geometric Features for Second Mesh..."<<endl;
 	CTSurface->findSignatureAll();
 
@@ -212,6 +217,7 @@ int main(int argc, char* argv[])
 
 	/* prepare data structures for registration */
 	//RCSurface->constructLink();
+	RCSurface->constructInitialFrameInfo();
 	//RCSurface->constructOccluded();
 	//RCSurface->constructAttractor();
 	RCSurface->constructEdgeList();
@@ -220,7 +226,8 @@ int main(int argc, char* argv[])
 	/////////////////////////////* 3compute correspondences for registration *////////////////////////////////////////////////////////////
 	RCSurface->findCorrespondenceBothWay(CTSurface,EUCLWEIGHT);
 	RCSurface->findMatch2(CTSurface);
-
+	RCSurface->outputFeatures();
+	
 	/* output force weight */
 	//ofstream fout;
 	//fout.open(filename3);

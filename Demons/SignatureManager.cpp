@@ -418,7 +418,7 @@ void BasicMesh::findSignatureAll(){
 
 void BasicMesh::outputFeatures(){
 	ofstream fout;
-	fout.open("features.txt");
+	fout.open(if_name+"features.txt");
 
 	fout<<vertexNum<<endl;
 
@@ -429,20 +429,22 @@ void BasicMesh::outputFeatures(){
 	signature* sig;
 
 	for (int i = 0; vb != ve; vb++,i++){
-		vh = vb;
+// 		vh = vb;
+// 
+// 		fout<<i+1<<' ';
+// 
+// 		Vector_3 d1 = vertex2d1_map[vh];
+// 		Vector_3 d2 = vertex2d2_map[vh];
+// 		Vector_3 normal = cross_product(d1,d2);
+// 
+// 		float k1 = vertex2k1_map[vh];
+// 		float k2 = vertex2k2_map[vh];
+// 		float K = k1*k2;
+// 		float H = (k1 + k2)/2;
+// 
+// 		fout<<normal<<' '<<K<<' '<<H<<endl;
 
-		fout<<i+1<<' ';
-
-		Vector_3 d1 = vertex2d1_map[vh];
-		Vector_3 d2 = vertex2d2_map[vh];
-		Vector_3 normal = cross_product(d1,d2);
-
-		float k1 = vertex2k1_map[vh];
-		float k2 = vertex2k2_map[vh];
-		float K = k1*k2;
-		float H = (k1 + k2)/2;
-
-		fout<<normal<<' '<<K<<' '<<H<<endl;
+		fout<<matchWeight[i]<<endl;
 	}
 
 	fout.close();
@@ -546,9 +548,6 @@ void BasicMesh::findCorrespondenceBothWay(BasicMesh* secondMesh,double featWeigh
 
 		iterSig = signatureMap.find(vh1);
 		if (iterSig == signatureMap.end()) continue;
-
-		//cout<<"1!"<<endl;
-
 		signature* sig1 = iterSig->second;
 		if (sig1 == NULL) continue;
 		
@@ -556,21 +555,13 @@ void BasicMesh::findCorrespondenceBothWay(BasicMesh* secondMesh,double featWeigh
 			vh2 = secondMesh->vertexIndex[j];
 
 			iterSig = secondMesh->signatureMap.find(vh2);
-
 			if (iterSig == secondMesh->signatureMap.end()) continue;
-
 			signature* sig2 = iterSig->second;
 			if (sig2 == NULL) continue;
 
 			dif = compareSignature(sig1, sig2);
 
-			/*
-			rotateSig(sig1);
-			if (compareSignature(sig1, sig2) < dif)
-				dif = compareSignature(sig1, sig2);
-			*/
-
-			dis = computeEuclideanDis(vh1->point(),vh2->point());
+ 			dis = computeEuclideanDis(vh1->point(),vh2->point());
 			if (dis > DISTHRESHOLD) continue;
 
 			float theta = acos(sig1->normal*sig2->normal/sqrt(sig1->normal.squared_length()*sig2->normal.squared_length()));
@@ -584,26 +575,6 @@ void BasicMesh::findCorrespondenceBothWay(BasicMesh* secondMesh,double featWeigh
 	}
 
 	//optional affinity
-	
-	/*
-	for (int i = 0; i < affinityM; i++){
-
-		for (int j = 0; j < affinityN; j++){
-			double scaledWeight;
-			
-			if (VAL(affinity,i,j,affinityN) >= 0)
-				scaledWeight = -VAL(affinity,i,j,affinityN)/SIMILARITY_SCALE;
-			else 
-				scaledWeight = -101;
-
-			if (scaledWeight < -100)
-				VAL(affinity,i,j,affinityN) = 0;
-			else 
-				VAL(affinity,i,j,affinityN) = exp(scaledWeight);
-		}
-		
-	}		
-	*/
 	float minA = 1000;
 	float maxA = 0;
 
@@ -629,77 +600,45 @@ void BasicMesh::findCorrespondenceBothWay(BasicMesh* secondMesh,double featWeigh
 		}
 	}
 
-	/*
-	for (int j = 0; j < affinityN; j++){
-		float minA = 1000;
-		float maxA = 0;
-
-		float temp;
-		for (int i = 0; i < affinityM; i++){
-			temp = VAL(featDis,i,j,affinityN);
-			if (temp >= 0){
-				if (temp > maxA) maxA = temp;
-				if (temp < minA) minA = temp;
-			}
-		}
-
-		for (int i = 0; i < affinityM; i++){
-			temp = VAL(featDis,i,j,affinityN);
-			if (temp >= 0)
-				VAL(featDis,i,j,affinityN) = (temp - minA) / (maxA - minA) * GEOAFFINITYWEIGHT;
-			else
-				VAL(featDis,i,j,affinityN) = GEOAFFINITYWEIGHT;
-
-		}
-	}
-
-	for (int i = 0; i < affinityM; i++)
-		
-		
-		for (int j = 0; j < affinityN; j++){
-			VAL(affinity,i,j,affinityN) += VAL(featDis,i,j,affinityN);
-			VAL(affinity,i,j,affinityN) = (GEOAFFINITYWEIGHT * 2 - VAL(affinity,i,j,affinityN)) ;
-		}	
-	*/
 	delete [] featDis;
 }
 
-void BasicMesh::findMatch(BasicMesh* secondMesh){
-	//use all correspondences
-	for (int i = 0; i < affinityM; i++){
-		if (matchWeight[i] > 1) continue;
-		
-		float maxA = -1;
-
-		double sum = 0;
-		for (int j = 0; j < affinityN; j++){
-			if (VAL(affinity,i,j,affinityN) > maxA){
-				maxA = VAL(affinity,i,j,affinityN);
-				bestMatch[i] = j;
-				matchWeight[i] = VAL(affinity,i,j,affinityN);
-			}
-			sum += VAL(affinity,i,j,affinityN);
-		}
-		
-/*		matchWeight[i] = sum;*/
-		if (sum > 2.5)
-			matchWeight[i] = 1 / (1 + exp(-0.5*(matchWeight[i]*100-73)));
-		else
-			matchWeight[i] = 0;
-		
-		/*syn 5: 0.3 100 35 */
-		/* 5708 -frame 240: 27,0.5,100,35 */
-
-		/* 5708-frame 10,450,760: 35,100,45
-		   5708-frame 1400: 10,100,40*/
-	}
-	
-	for (int i = 0; i < affinityM; i++){
-		if (!attractor[i]) continue;
-
-		matchWeight[i] = 0;
-	}
-}
+// void BasicMesh::findMatch(BasicMesh* secondMesh){
+// 	//use all correspondences
+// 	for (int i = 0; i < affinityM; i++){
+// 		if (matchWeight[i] > 1) continue;
+// 		
+// 		float maxA = -1;
+// 
+// 		double sum = 0;
+// 		for (int j = 0; j < affinityN; j++){
+// 			if (VAL(affinity,i,j,affinityN) > maxA){
+// 				maxA = VAL(affinity,i,j,affinityN);
+// 				bestMatch[i] = j;
+// 				matchWeight[i] = VAL(affinity,i,j,affinityN);
+// 			}
+// 			sum += VAL(affinity,i,j,affinityN);
+// 		}
+// 		
+// /*		matchWeight[i] = sum;*/
+// 		if (sum > 2.5)
+// 			matchWeight[i] = 1 / (1 + exp(-0.5*(matchWeight[i]*100-73)));
+// 		else
+// 			matchWeight[i] = 0;
+// 		
+// 		/*syn 5: 0.3 100 35 */
+// 		/* 5708 -frame 240: 27,0.5,100,35 */
+// 
+// 		/* 5708-frame 10,450,760: 35,100,45
+// 		   5708-frame 1400: 10,100,40*/
+// 	}
+// 	
+// 	for (int i = 0; i < affinityM; i++){
+// 		if (!attractor[i]) continue;
+// 
+// 		matchWeight[i] = 0;
+// 	}
+// }
 
 int compareNode (const void * a, const void * b)
 {
@@ -732,7 +671,8 @@ void BasicMesh::findMatch2(BasicMesh* secondMesh){
 		jbool[secondMesh->landmark[k]] = true;
 
 		matchWeight[landmark[k]] = maxWeight;
-		bestMatch[landmark[k]] = secondMesh->landmark[k];
+		Vertex_const_handle vh = secondMesh->vertexIndex[secondMesh->landmark[k]];
+		bestMatch[landmark[k]] = Vector_3(vh->point().x(),vh->point().y(),vh->point().z()); 
 	}
 
 	/* then use geometric feature to find some other correspondences */
@@ -740,12 +680,45 @@ void BasicMesh::findMatch2(BasicMesh* secondMesh){
 		if (!ibool[queue[k].i] && !jbool[queue[k].j]){
 			ibool[queue[k].i] = true;
 			jbool[queue[k].j] = true;
+			if (queue[k].value < 0.9) break;
 
-			matchWeight[queue[k].i] = queue[k].value * maxWeight;
+			matchWeight[queue[k].i] = (queue[k].value * maxWeight - 0.9) / 0.1;
 			//matchWeight[queue[k].i] = 0.8;
-			bestMatch[queue[k].i] = queue[k].j;
+			PolyhedralSurf::Vertex_const_handle vh =  secondMesh->vertexIndex[queue[k].j];
+			PolyhedralSurf::Vertex_const_handle source = vertexIndex[queue[k].i];
+			PolyhedralSurf::Halfedge_around_vertex_const_circulator tempHfe = vh->vertex_begin();
+			Vector_3 minTarget;
+			double minDis = 1000;
 
-			if (queue[k].value < 0.2) break;
+			for (int i = 0; i< vh->degree(); i++){
+				if (tempHfe->is_border()) tempHfe++;
+				
+				PolyhedralSurf::Halfedge_around_facet_const_circulator shf = tempHfe->facet()->facet_begin();
+
+				PolyhedralSurf::Vertex_const_handle v1 = shf->vertex();
+				shf++;
+				PolyhedralSurf::Vertex_const_handle v2 = shf->vertex();
+				shf++;
+				PolyhedralSurf::Vertex_const_handle v3 = shf->vertex();
+
+				Vector_3 tri[3] = {Vector_3(v1->point().x(),v1->point().y(),v1->point().z()),
+								   Vector_3(v2->point().x(),v2->point().y(),v2->point().z()),
+								   Vector_3(v3->point().x(),v3->point().y(),v3->point().z())};
+
+				Vector_3 sourcePos = Vector_3(source->point().x(),source->point().y(),source->point().z());
+
+				Vector_3 target = closesPointOnTriangle(tri,sourcePos);
+				Vector_3 dis = target - sourcePos;
+				if (dis.squared_length() < minDis){
+					minTarget = target;
+					minDis = dis.squared_length();
+				}
+
+				tempHfe++;
+			}
+
+			bestMatch[queue[k].i] = minTarget;
+			
 		}
 	
 	delete[] queue;
@@ -753,87 +726,87 @@ void BasicMesh::findMatch2(BasicMesh* secondMesh){
 	delete[] jbool;
 }
 
-void BasicMesh::findClosestPoint(BasicMesh* secondMesh){
-	PolyhedralSurf::Vertex_const_iterator vb = P.vertices_begin();
-	PolyhedralSurf::Vertex_const_iterator ve = P.vertices_end();
-	PolyhedralSurf::Vertex_const_handle vh1,vh2;
-
-	std::map<Vertex_const_handle, signature*>::iterator iterSig;
-
-	for (int i = 0; vb != ve; vb++,i++){
-		//cout<<"Working on vertex: "<<i<<endl;
-		double minDis = 100000;
-		int minJ = 0;
-
-		vh1 = vb;
-
-		iterSig = signatureMap.find(vh1);
-		if (iterSig == signatureMap.end()) continue;
-
-		signature* sig1 = iterSig->second;
-		if (sig1 == NULL) continue;
-
-		for (int j = 0; j < secondMesh->vertexNum; j++){
-			vh2 = secondMesh->vertexIndex[j];
-
-			iterSig = secondMesh->signatureMap.find(vh2);
-
-			if (iterSig == secondMesh->signatureMap.end()) continue;
-
-			signature* sig2 = iterSig->second;
-			if (sig2 == NULL) continue;
-
-			float theta = acos(sig1->normal*sig2->normal/sqrt(sig1->normal.squared_length()*sig2->normal.squared_length()));
-			if (theta > PI/2) continue;
-
-			double dis = computeEuclideanDis(vertexIndex[i]->point(),secondMesh->vertexIndex[j]->point());
-
-			if (dis < minDis){
-				minDis = dis;
-				minJ = j;
-			}
-		}
-
-		bestMatch[i] = minJ;
-		
-		////////////////
-		int minI;
-		minDis = 100000;
-
-		vh1 = secondMesh->vertexIndex[minJ];
-		iterSig = secondMesh->signatureMap.find(vh1);
-		sig1 = iterSig->second;
-		if (sig1 == NULL) continue;
-
-		for (int j = 0; j < vertexNum; j++){
-			vh2 = vertexIndex[j];
-
-			iterSig = signatureMap.find(vh2);
-
-			if (iterSig == signatureMap.end()) continue;
-
-			signature* sig2 = iterSig->second;
-			if (sig2 == NULL) continue;
-
-			float theta = acos(sig1->normal*sig2->normal/sqrt(sig1->normal.squared_length()*sig2->normal.squared_length()));
-			if (theta > PI/2) continue;
-
-			double dis = computeEuclideanDis(vertexIndex[j]->point(),secondMesh->vertexIndex[minJ]->point());
-
-			if (dis < minDis){
-				minDis = dis;
-				minI = j;
-			}
-		}
-
-		double dis = computeEuclideanDis(vertexIndex[minI]->point(),vertexIndex[i]->point());
-
-// 		if (minDis < 3)
-// 			matchWeight[i] = 0.4;
-// 		else 
-// 			matchWeight[i] = 0;
-		matchWeight[i] = exp(- 0.5 * dis*dis);
-	}
-
-
-}
+// void BasicMesh::findClosestPoint(BasicMesh* secondMesh){
+// 	PolyhedralSurf::Vertex_const_iterator vb = P.vertices_begin();
+// 	PolyhedralSurf::Vertex_const_iterator ve = P.vertices_end();
+// 	PolyhedralSurf::Vertex_const_handle vh1,vh2;
+// 
+// 	std::map<Vertex_const_handle, signature*>::iterator iterSig;
+// 
+// 	for (int i = 0; vb != ve; vb++,i++){
+// 		//cout<<"Working on vertex: "<<i<<endl;
+// 		double minDis = 100000;
+// 		int minJ = 0;
+// 
+// 		vh1 = vb;
+// 
+// 		iterSig = signatureMap.find(vh1);
+// 		if (iterSig == signatureMap.end()) continue;
+// 
+// 		signature* sig1 = iterSig->second;
+// 		if (sig1 == NULL) continue;
+// 
+// 		for (int j = 0; j < secondMesh->vertexNum; j++){
+// 			vh2 = secondMesh->vertexIndex[j];
+// 
+// 			iterSig = secondMesh->signatureMap.find(vh2);
+// 
+// 			if (iterSig == secondMesh->signatureMap.end()) continue;
+// 
+// 			signature* sig2 = iterSig->second;
+// 			if (sig2 == NULL) continue;
+// 
+// 			float theta = acos(sig1->normal*sig2->normal/sqrt(sig1->normal.squared_length()*sig2->normal.squared_length()));
+// 			if (theta > PI/2) continue;
+// 
+// 			double dis = computeEuclideanDis(vertexIndex[i]->point(),secondMesh->vertexIndex[j]->point());
+// 
+// 			if (dis < minDis){
+// 				minDis = dis;
+// 				minJ = j;
+// 			}
+// 		}
+// 
+// 		bestMatch[i] = minJ;
+// 		
+// 		////////////////
+// 		int minI;
+// 		minDis = 100000;
+// 
+// 		vh1 = secondMesh->vertexIndex[minJ];
+// 		iterSig = secondMesh->signatureMap.find(vh1);
+// 		sig1 = iterSig->second;
+// 		if (sig1 == NULL) continue;
+// 
+// 		for (int j = 0; j < vertexNum; j++){
+// 			vh2 = vertexIndex[j];
+// 
+// 			iterSig = signatureMap.find(vh2);
+// 
+// 			if (iterSig == signatureMap.end()) continue;
+// 
+// 			signature* sig2 = iterSig->second;
+// 			if (sig2 == NULL) continue;
+// 
+// 			float theta = acos(sig1->normal*sig2->normal/sqrt(sig1->normal.squared_length()*sig2->normal.squared_length()));
+// 			if (theta > PI/2) continue;
+// 
+// 			double dis = computeEuclideanDis(vertexIndex[j]->point(),secondMesh->vertexIndex[minJ]->point());
+// 
+// 			if (dis < minDis){
+// 				minDis = dis;
+// 				minI = j;
+// 			}
+// 		}
+// 
+// 		double dis = computeEuclideanDis(vertexIndex[minI]->point(),vertexIndex[i]->point());
+// 
+// // 		if (minDis < 3)
+// // 			matchWeight[i] = 0.4;
+// // 		else 
+// // 			matchWeight[i] = 0;
+// 		matchWeight[i] = exp(- 0.5 * dis*dis);
+// 	}
+// 
+// 
+// }

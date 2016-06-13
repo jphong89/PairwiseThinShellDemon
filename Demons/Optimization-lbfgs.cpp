@@ -5,9 +5,6 @@
 #include <fstream>
 using namespace std;
 
-double* tempG;
-double* tempS;
-
 static int progress(
 	void *instance,
 	const lbfgsfloatval_t *tu,
@@ -22,7 +19,7 @@ static int progress(
 	)
 {
 	pthread_mutex_lock(&lock);
-	if ((k % 100 == 0) || (k <=1)){
+	if ((k % 5 == 0) || (k <=1)){
 		memcpy(u,tu,sizeof(lbfgsfloatval_t)*affinityM*3);
 
 		cout<<"Iteration: "<<k<<" -------------------------------"<<endl;
@@ -42,12 +39,7 @@ static int progress(
 	return 0;
 }
 
-void initialDVF(double* initialU){	//
-	char filename2[50] = "temp8_occluded2.off";
-
-	double* newConfig = new double[affinityM*3];
-	readOFF(filename2,newConfig);
-	
+void initialDVF(double* initialU){
 	PolyhedralSurf::Vertex_const_iterator vb = RCSurface->P.vertices_begin();
 	PolyhedralSurf::Vertex_const_iterator ve = RCSurface->P.vertices_end();
 	PolyhedralSurf::Vertex_const_handle vh;
@@ -55,9 +47,9 @@ void initialDVF(double* initialU){	//
 	for (int i = 0; vb != ve; vb++,i++){
 		vh = vb;
 
-		initialU[i*3] = newConfig[i*3] - vh->point().x();
-		initialU[i*3+1] = newConfig[i*3+1] - vh->point().y();
-		initialU[i*3+2] = newConfig[i*3+2] - vh->point().z();
+		initialU[i*3]   = CTSurface->vertexIndex[i]->point().x() - vh->point().x();
+		initialU[i*3+1] = CTSurface->vertexIndex[i]->point().y()  - vh->point().y();
+		initialU[i*3+2] = CTSurface->vertexIndex[i]->point().z()  - vh->point().z();
 	}
 }
 
@@ -92,10 +84,6 @@ void *startOptimization(void * arg){
 
 	int ret;
 	lbfgsfloatval_t *tempU = new lbfgsfloatval_t[affinityM*3];
-	tempG = new double[RCSurface->faceNum*9];
-	tempS  = new double[RCSurface->faceNum];
-	memset(tempS,0,sizeof(double)*RCSurface->faceNum);
-	memset(tempG,0,sizeof(double)*RCSurface->faceNum*9);
 	memset(tempU,0,sizeof(lbfgsfloatval_t) * affinityM * 3);
 
 // 	omp_set_dynamic(0);
@@ -105,7 +93,7 @@ void *startOptimization(void * arg){
 	regweight = REGWEIGHT;
 	bendweight = BENDWEIGHT;
 
-	for (int i = 0; i < 19; i++){
+	for (int i = 0; i < 10; i++){
 		cout<<"Velocity Iteration: "<<i<<endl;
 
 		if (i > 0){
@@ -119,7 +107,7 @@ void *startOptimization(void * arg){
 
 			memset(tempU,0,sizeof(lbfgsfloatval_t) * affinityM * 3);
 			memset(affinity,0,affinityM * affinityN * sizeof(double));
-			memset(bestMatch,0,sizeof(int)*affinityM);
+			for (int i = 0; i < affinityM; i++) bestMatch[i]=Vector_3(0,0,0);	
 			memset(matchWeight,0,sizeof(float)*affinityM);
 			
 			cout<<"Recompute affinity map..."<<endl;
@@ -143,20 +131,34 @@ void *startOptimization(void * arg){
 
 		clock_t start, finish;
 		double duration;
+
 		start = clock();
 		QueryPerformanceCounter(&t1);
-
-		lbfgsfloatval_t fx = 0;
+		
 		lbfgs_parameter_init(&param);
-		param.max_iterations = opIterNum;
 		param.epsilon = 1e-5f;
-		ret = lbfgs(affinityM * 3, tempU, &fx, evaluate, progress, NULL, &param);
+		int CurrentIter = 0;
+		lbfgsfloatval_t fx = 0;
+		
+		{
+			param.max_iterations = 2000;
+			double tempWeight = bendweight;
+			bendweight = 0;
+			ret = lbfgs(affinityM * 3, tempU, &fx, evaluate, progress, NULL, &param);
+
+			fx = 0;
+			param.max_iterations = 20000;
+			bendweight = tempWeight;
+			ret = lbfgs(affinityM * 3, tempU, &fx, evaluate, progress, NULL, &param);
+		}
+
 
 		finish = clock();
 		duration = (double)(finish - start) / CLOCKS_PER_SEC;
 		cout<<"function value: "<<fx<<"  Elapsed Time: "<<duration<<" s"<<endl;
-
 		memcpy(u,tempU,sizeof(lbfgsfloatval_t)*affinityM*3);
+		if (is_orthotropic) transportFrame();
+
 		//output file
 		filename[0] = '\0';
 		strcat(filename,"temp");
@@ -176,7 +178,7 @@ void *startOptimization(void * arg){
 		
 		regweight *= 0.95;
 		bendweight *= 0.95;
-		//EUCLWEIGHT *= 0.9;
+		EUCLWEIGHT *= 0.8;
 	}
 
 	//final iteration evaluation
@@ -199,32 +201,23 @@ static lbfgsfloatval_t evaluate(
 	double data = penalizeData(u,g);
 
 	/* stretching */
+	//double stretching = penalizeStretchQuadratic(u,g);
 	double stretching = penalizeStretch(u,g);
 	//double stretching = 0;
 	/* bending */
 	double bending = penalizeBendQuadratic(u,g);
+	//double bending = penalizeBendAngleLP(u,g);
 	//double bending = 0;
-	double landmark = penalizaeLandmark(u,g);
+	
+	//double landmark = penalizaeLandmark(u,g);
 
  	//double linkStretching = penalizeLink(u,g);
-// 	double linkStretching = 0;
-// 	for (int i = 0; i < RCSurface->linkNum; i++){
-// 		int idx1 = linkList[i].index1;
-// 		int idx2 = linkList[i].index2;
-// 
-// 		Vector_3 deformVec(u[idx2*3] - u[idx1*3],u[idx2*3+1] - u[idx1*3+1],u[idx2*3+2] - u[idx1*3+2]);
-// 
-// 		g[idx1*3] += -2 * LINKWEIGHT * deformVec.x();
-// 		g[idx1*3+1] += -2 * LINKWEIGHT * deformVec.y();
-// 		g[idx1*3+2] += -2 * LINKWEIGHT * deformVec.z();
-// 		g[idx2*3] += 2 * LINKWEIGHT * deformVec.x();
-// 		g[idx2*3+1] += 2 * LINKWEIGHT * deformVec.y();
-// 		g[idx2*3+2] += 2 * LINKWEIGHT * deformVec.z();
-// 
-// 		linkStretching += LINKWEIGHT * deformVec.squared_length();
-// 	}
+// 	cout<<data<<endl;
+// 	cout<<stretching<<endl;
+// 	cout<<bending<<endl;
+
 	pthread_mutex_unlock(&lock);
-	return data + stretching +  bending +landmark /*+ linkStretching*/;
+	return data + stretching +  bending /*+landmark + linkStretching*/;
 }
 
 lbfgsfloatval_t penalizeData(const lbfgsfloatval_t *u, lbfgsfloatval_t *g){
@@ -247,7 +240,7 @@ lbfgsfloatval_t penalizeData(const lbfgsfloatval_t *u, lbfgsfloatval_t *g){
 		}
 
 		Point_3 deformed = vh->point() + Vector_3(u[i*3],u[i*3+1],u[i*3+2]);
-		Point_3 cor = CTSurface->vertexIndex[bestMatch[i]]->point();
+		Point_3 cor = Point_3(bestMatch[i].x(),bestMatch[i].y(),bestMatch[i].z());
 		double weight = matchWeight[i];
 
 		Vector_3 dis(deformed,cor);
@@ -261,10 +254,9 @@ lbfgsfloatval_t penalizeData(const lbfgsfloatval_t *u, lbfgsfloatval_t *g){
 	return fx;
 }
 
-lbfgsfloatval_t penalizeStretch(const lbfgsfloatval_t *u, lbfgsfloatval_t *g){
+lbfgsfloatval_t penalizeStretchQuadratic(const lbfgsfloatval_t *u, lbfgsfloatval_t *g){
 	double stretching = 0;
 
-	if (regweight < 0){ // edge-based  stretching energy
 		for (int i=0; i < RCSurface->edgeNum/2;i++){
 
 
@@ -285,17 +277,14 @@ lbfgsfloatval_t penalizeStretch(const lbfgsfloatval_t *u, lbfgsfloatval_t *g){
 
 			stretching += (deformVec.squared_length() * weight);
 		}
-	}else{ //triangle-based stretching energy
-		facet* faceList = RCSurface->faceList;
+	facetStretching = stretching;
+	return stretching;
+}
+lbfgsfloatval_t penalizeStretch(const lbfgsfloatval_t *u, lbfgsfloatval_t *g){
+	double stretching = 0;
 
-// 		double Dtemp_v1_x,Dtemp_v1_y,Dtemp_v1_z;
-// 		double Dtemp_v2_x,Dtemp_v2_y,Dtemp_v2_z;
-// 
-// 		Point_3 newV1,newV2,newV3;
-// 		Vector_3 temp_v1,temp_v2;
-// 		double v11,v12,v21,v22,J11,J12,J21,J22,S11,S12,S21,S22,k;
-// 		double Dv11,Dv12,Dv21,Dv22,DJ11,DJ12,DJ21,DJ22,DS11,DS12,DS21,DS22,dk;
-// 		double weight,trace,trace_2,det,det_inv,Ddet;
+	{ //triangle-based stretching energy
+		facet* faceList = RCSurface->faceList;
 
 		int idx;
 		//#pragma omp parallel for private(idx)
@@ -325,18 +314,16 @@ lbfgsfloatval_t penalizeStretch(const lbfgsfloatval_t *u, lbfgsfloatval_t *g){
 			double J21 = v12*f.inverse[0][0] + v22*f.inverse[1][0];
 			double J22 = v12*f.inverse[0][1] + v22*f.inverse[1][1];
 
-			double S11 = J11*J11 + J21*J21; double S12 = J11*J12+J21*J22; double S21 = S12; double S22 = J12*J12 + J22*J22;
-			double trace = (S11 + S22 - 2);
-			
-			//det = S11*S22 - S12*S21;
-			//det_inv = 1 / det;
-			double trace_2 = 0.5*(S11-1)*(S11-1) + 4*S12*S21 + 0.5*(S22-1)*(S22-1);
+			double S11 = J11*J11 + J21*J21 - 1; double S12 = J11*J12+J21*J22; double S21 = S12; double S22 = J12*J12 + J22*J22 - 1;
 
-			//stretching += weight * (STRETCH_MIU / 2 * trace + (STRETCH_LAMBDA - STRETCH_MIU*2)/8 * det + (STRETCH_LAMBDA + STRETCH_MIU*2)/8 * det_inv);
-			//stretching += weight *YOUNG/2/(1-POISSON*POISSON)*((1-POISSON)*trace_2+POISSON*trace*trace);
-			tempS[idx] = weight *YOUNG/2/(1-POISSON*POISSON)*((1-POISSON)*trace_2+POISSON*trace*trace);
-
-			//cout<<"complete 1.1 single energy computing"<<endl;
+			double trace,trace_2;
+			if (is_orthotropic){
+				stretching += weight * (RCSurface->C[idx][0] * S11*S11 + 2 * RCSurface->C[idx][1] * S11*S22 + RCSurface->C[idx][2] * S22*S22 + RCSurface->C[idx][3] * S12*S12);
+			}else{
+				trace = (S11 + S22);
+				trace_2 = S11*S11 + 2*S12*S21 + S22*S22;
+				stretching += weight *YOUNG/(1-POISSON*POISSON)*((1-POISSON)*trace_2+POISSON*trace*trace);
+			}
 
 			/* COMPUTE GRADIENT */
 			for (int i = 1; i < 4; i++)
@@ -358,29 +345,21 @@ lbfgsfloatval_t penalizeStretch(const lbfgsfloatval_t *u, lbfgsfloatval_t *g){
 					double DS22 = 2*J12*DJ12 + 2*J22*DJ22;
 					double DS12 = (DJ11*J12+J11*DJ12) + (DJ21*J22+J21*DJ22);
 					double DS21 = DS12;
-
-					//Ddet = (DS11*S22+S11*DS22) - (DS12*S21+S12*DS21);
-
-					//g[f.index[i]*3+j-1] += weight * STRETCH_MIU / 2 * (DS11 + DS22);
-					//g[f.index[i]*3+j-1] += weight * (STRETCH_LAMBDA - STRETCH_MIU*2)/8 * Ddet;
-					//g[f.index[i]*3+j-1] += weight * (STRETCH_LAMBDA + STRETCH_MIU*2)/8 * (-1/(det*det)*Ddet);
 					
-// 					g[f.index[i]*3+j-1] += weight *YOUNG/2/(1-POISSON*POISSON)*
-// 						((1-POISSON)*(1*(S11-1)*DS11+4*S12*DS21+4*DS12*S21+1*(S22-1)*DS22)+
-// 						 POISSON*2*trace*(DS11+DS22));
-					tempG[idx*9+(i-1)*3+j-1] = weight *YOUNG/2/(1-POISSON*POISSON)*
-						 					   ((1-POISSON)*(1*(S11-1)*DS11+4*S12*DS21+4*DS12*S21+1*(S22-1)*DS22)+
-						    				   POISSON*2*trace*(DS11+DS22));
+					if (is_orthotropic){
+						g[f.index[i]*3+j-1] += weight * (2*RCSurface->C[idx][0] * S11*DS11 + 
+							                             2*RCSurface->C[idx][1] * DS11*S22 + 
+														 2*RCSurface->C[idx][1] * S11*DS22 +  
+														 2*RCSurface->C[idx][2] * S22*DS22 + 
+														 2*RCSurface->C[idx][3] * S12*DS12);
+					}else{
+						g[f.index[i]*3+j-1] += weight * YOUNG/(1-POISSON*POISSON)*
+							((1-POISSON)*(2*S11*DS11+2*S12*DS21+2*DS12*S21+2*S22*DS22)+
+							POISSON*2*trace*(DS11+DS22));
+					}
 				}
 
 
-		}
-
-		for (int idx=0; idx < RCSurface->faceNum;idx++){
-			stretching += tempS[idx];
-			for (int i = 1; i < 4; i++)
-				for (int j = 1; j < 4; j++)
-					g[faceList[idx].index[i]*3+j-1] += tempG[idx*9+(i-1)*3+j-1];
 		}	
 	}
 
@@ -388,7 +367,217 @@ lbfgsfloatval_t penalizeStretch(const lbfgsfloatval_t *u, lbfgsfloatval_t *g){
 	return stretching;
 }
 
-lbfgsfloatval_t penalizeBend(const lbfgsfloatval_t *u, lbfgsfloatval_t *g){
+lbfgsfloatval_t penalizeBendAngle(const lbfgsfloatval_t *u, lbfgsfloatval_t *g){
+	double bending = 0;
+	facet* faceList = RCSurface->faceList;
+
+	Point_3 newV1,newV2,newV3,newNB1,newNB2,newNB3;
+	double theta1,theta2,theta3;
+	threeTuple db1,db2,db3,ds1,ds2,ds3,dnm,dn1,dn2,dn3;
+	double dx1,dx2,dx3,Dtheta1,Dtheta2,Dtheta3,DSOD_00,DSOD_01,DSOD_10,DSOD_11;
+	double weight,Dbend;
+
+	for (int idx=0; idx < RCSurface->faceNum;idx++){
+		facet f = faceList[idx];
+		if (f.isBorder) continue;
+		weight = f.area / RCSurface->averageArea * bendweight;
+
+		newV1 = f.v1->point() + Vector_3(u[f.index[1]*3],u[f.index[1]*3+1],u[f.index[1]*3+2]);
+		newV2 = f.v2->point() + Vector_3(u[f.index[2]*3],u[f.index[2]*3+1],u[f.index[2]*3+2]);
+		newV3 = f.v3->point() + Vector_3(u[f.index[3]*3],u[f.index[3]*3+1],u[f.index[3]*3+2]);
+		newNB1 = f.nb1->point() + Vector_3(u[f.nbIdx1*3],u[f.nbIdx1*3+1],u[f.nbIdx1*3+2]);
+		newNB2 = f.nb2->point() + Vector_3(u[f.nbIdx2*3],u[f.nbIdx2*3+1],u[f.nbIdx2*3+2]);
+		newNB3 = f.nb3->point() + Vector_3(u[f.nbIdx3*3],u[f.nbIdx3*3+1],u[f.nbIdx3*3+2]);
+
+		/* -------------- compute angle ------------------------- */
+		/* ------------------------------------------------------ */
+		Vector_3 b1(newV1,newV2);
+		Vector_3 b2(newV2,newV3);
+		Vector_3 b3(newV3,newV1);
+		Vector_3 s1(newV1,newNB1);
+		Vector_3 s2(newV2,newNB2);
+		Vector_3 s3(newV3,newNB3);
+
+		Vector_3 nm = cross_product(b1,b2);
+		Vector_3 n1 = cross_product(s1,b1);
+		Vector_3 n2 = cross_product(s2,b2);
+		Vector_3 n3 = cross_product(s3,b3);
+
+		double sign1 = s1*nm;
+		double sign2 = s2*nm;
+		double sign3 = s3*nm;
+
+		double x1 = n1*nm / (sqrt(n1.squared_length()+EPS)*sqrt(nm.squared_length()+EPS));
+		double x2 = n2*nm / (sqrt(n2.squared_length()+EPS)*sqrt(nm.squared_length()+EPS));
+		double x3 = n3*nm / (sqrt(n3.squared_length()+EPS)*sqrt(nm.squared_length()+EPS));
+
+		theta1 = acos(x1);
+		theta2 = acos(x2);
+		theta3 = acos(x3);
+		
+		if (sign1 > 0) theta1 = -theta1;
+		if (sign2 > 0) theta2 = -theta2;
+		if (sign3 > 0) theta3 = -theta3;
+
+		double SOD_00 = (theta1-f.theta1) * f.SO1[0][0] + (theta2-f.theta2) * f.SO2[0][0] + (theta3-f.theta3) * f.SO3[0][0];
+		double SOD_01 = (theta1-f.theta1) * f.SO1[0][1] + (theta2-f.theta2) * f.SO2[0][1] + (theta3-f.theta3) * f.SO3[0][1];
+		double SOD_10 = (theta1-f.theta1) * f.SO1[1][0] + (theta2-f.theta2) * f.SO2[1][0] + (theta3-f.theta3) * f.SO3[1][0];
+		double SOD_11 = (theta1-f.theta1) * f.SO1[1][1] + (theta2-f.theta2) * f.SO2[1][1] + (theta3-f.theta3) * f.SO3[1][1];
+
+		if (is_orthotropic)
+			bending += weight * (RCSurface->C[idx][0] * SOD_00*SOD_00 + 
+								 2 * RCSurface->C[idx][1] * SOD_00*SOD_11 + 
+							     RCSurface->C[idx][2] * SOD_11*SOD_11 + 
+			                     RCSurface->C[idx][3] * SOD_01*SOD_10); 
+		else
+			bending += weight * (SOD_00*SOD_00 + SOD_01*SOD_01 + SOD_10*SOD_10 + SOD_11*SOD_11); 
+
+		/* -------------- compute gradient ------------------------- */
+		/* --------------------------------------------------------- */
+// 		Dtheta1 = computeDtheta(newV1,newV2,newV3,newNB1,1);
+// 		Dtheta2 = computeDtheta(newV2,newV3,newV1,newNB2,3);
+// 		Dtheta3 = computeDtheta(newV3,newV1,newV2,newNB3,2);
+// 		upgradeGradient();
+
+	}
+}
+
+lbfgsfloatval_t penalizeBendAngleLP(const lbfgsfloatval_t *u, lbfgsfloatval_t *g){
+	double bending = 0;
+	facet* faceList = RCSurface->faceList;
+
+	Point_3 newV1,newV2,newV3,newNB1,newNB2,newNB3;
+	double theta1,theta2,theta3;
+	threeTuple db1,db2,db3,ds1,ds2,ds3,dnm,dn1,dn2,dn3;
+	double dx1,dx2,dx3,Dtheta1,Dtheta2,Dtheta3,DSOD_00,DSOD_01,DSOD_10,DSOD_11;
+	double weight,Dbend,trace,trace_2;
+
+	for (int idx=0; idx < RCSurface->faceNum;idx++){
+		facet f = faceList[idx];
+		if (f.isBorder) continue;
+		weight = f.area / RCSurface->averageArea * bendweight;
+
+		newV1 = f.v1->point() + Vector_3(u[f.index[1]*3],u[f.index[1]*3+1],u[f.index[1]*3+2]);
+		newV2 = f.v2->point() + Vector_3(u[f.index[2]*3],u[f.index[2]*3+1],u[f.index[2]*3+2]);
+		newV3 = f.v3->point() + Vector_3(u[f.index[3]*3],u[f.index[3]*3+1],u[f.index[3]*3+2]);
+		newNB1 = f.nb1->point() + Vector_3(u[f.nbIdx1*3],u[f.nbIdx1*3+1],u[f.nbIdx1*3+2]);
+		newNB2 = f.nb2->point() + Vector_3(u[f.nbIdx2*3],u[f.nbIdx2*3+1],u[f.nbIdx2*3+2]);
+		newNB3 = f.nb3->point() + Vector_3(u[f.nbIdx3*3],u[f.nbIdx3*3+1],u[f.nbIdx3*3+2]);
+
+		/* -------------- compute angle ------------------------- */
+		/* ------------------------------------------------------ */
+		Vector_3 b1(newV1,newV2);
+		Vector_3 b2(newV2,newV3);
+		Vector_3 b3(newV3,newV1);
+		Vector_3 s1(newV1,newNB1);
+		Vector_3 s2(newV2,newNB2);
+		Vector_3 s3(newV3,newNB3);
+
+		Vector_3 nm = cross_product(b1,b2);
+		Vector_3 n1 = cross_product(s1,b1);
+		Vector_3 n2 = cross_product(s2,b2);
+		Vector_3 n3 = cross_product(s3,b3);
+
+		double sign1 = s1*nm;
+		double sign2 = s2*nm;
+		double sign3 = s3*nm;
+
+		double x1 = n1*nm / (sqrt(n1.squared_length()+EPS)*sqrt(nm.squared_length()+EPS));
+		double x2 = n2*nm / (sqrt(n2.squared_length()+EPS)*sqrt(nm.squared_length()+EPS));
+		double x3 = n3*nm / (sqrt(n3.squared_length()+EPS)*sqrt(nm.squared_length()+EPS));
+
+		if (sign1 > 0) x1 = (2 - x1);
+		if (sign2 > 0) x2 = (2 - x2);
+		if (sign3 > 0) x3 = (2 - x3);
+
+		if (x1 <= 1) theta1 = (-0.69813170079773212 * x1 * x1 - 0.87266462599716477) * x1 + 1.5707963267948966;
+		else	     theta1 = (-0.69813170079773212 * (x1-2) * (x1-2) - 0.87266462599716477) * (x1-2) - 1.5707963267948966;
+		if (x2 <= 1) theta2 = (-0.69813170079773212 * x2 * x2 - 0.87266462599716477) * x2 + 1.5707963267948966;
+		else	     theta2 = (-0.69813170079773212 * (x2-2) * (x2-2) - 0.87266462599716477) * (x2-2) - 1.5707963267948966;
+		if (x3 <= 1) theta3 = (-0.69813170079773212 * x3 * x3 - 0.87266462599716477) * x3 + 1.5707963267948966;
+		else	     theta3 = (-0.69813170079773212 * (x3-2) * (x3-2) - 0.87266462599716477) * (x3-2) - 1.5707963267948966;
+
+		/* */
+		double SOD_00 = (theta1-f.theta1) * f.SO1[0][0] + (theta2-f.theta2) * f.SO2[0][0] + (theta3-f.theta3) * f.SO3[0][0];
+		double SOD_01 = (theta1-f.theta1) * f.SO1[0][1] + (theta2-f.theta2) * f.SO2[0][1] + (theta3-f.theta3) * f.SO3[0][1];
+		double SOD_10 = (theta1-f.theta1) * f.SO1[1][0] + (theta2-f.theta2) * f.SO2[1][0] + (theta3-f.theta3) * f.SO3[1][0];
+		double SOD_11 = (theta1-f.theta1) * f.SO1[1][1] + (theta2-f.theta2) * f.SO2[1][1] + (theta3-f.theta3) * f.SO3[1][1];
+
+		if (is_orthotropic)
+			bending += weight * (RCSurface->C[idx][0] * SOD_00*SOD_00 + 
+			                     2 * RCSurface->C[idx][1] * SOD_00*SOD_11 + 
+								 RCSurface->C[idx][2] * SOD_11*SOD_11 + 
+								 RCSurface->C[idx][3] * SOD_01*SOD_10); 
+		else{
+			trace = (SOD_00 + SOD_11);
+			trace_2 = SOD_00*SOD_00 + 2*SOD_01*SOD_10 + SOD_11*SOD_11;
+			bending += weight *YOUNG/(1-POISSON*POISSON)*((1-POISSON)*trace_2+POISSON*trace*trace);
+			//bending += weight * (SOD_00*SOD_00 + SOD_01*SOD_01 + SOD_10*SOD_10 + SOD_11*SOD_11); 
+		}
+		/* -------------- compute gradient ------------------------- */
+		/* --------------------------------------------------------- */
+
+		for (int i = 1; i < 7; i++)
+			for (int j = 1; j < 4; j++){
+			/* */
+				db1 = computeGradient(1,i,j);db2 = computeGradient(2,i,j);db3 = computeGradient(3,i,j);
+				ds1 = computeGradient(4,i,j);ds2 = computeGradient(5,i,j);ds3 = computeGradient(6,i,j);
+
+				dnm = computeCrossProductGradient(b1,b2,db1,db2);
+				dn1 = computeCrossProductGradient(s1,b1,ds1,db1);
+				dn2 = computeCrossProductGradient(s2,b2,ds2,db2);
+				dn3 = computeCrossProductGradient(s3,b3,ds3,db3);
+
+				dx1 = computeDotProductGradient(n1,nm,dn1,dnm);
+				dx2 = computeDotProductGradient(n2,nm,dn2,dnm);
+				dx3 = computeDotProductGradient(n3,nm,dn3,dnm);
+
+				if (sign1 > 0) dx1 = -dx1;
+				if (sign2 > 0) dx2 = -dx2;
+				if (sign3 > 0) dx3 = -dx3;
+
+				if (x1 <= 1) Dtheta1 = (-3 * 0.69813170079773212 * x1 * x1 - 0.87266462599716477)  * dx1;
+				else		 Dtheta1 = (-3 * 0.69813170079773212 * (x1-2) * (x1-2) - 0.87266462599716477)  * dx1;
+				if (x2 <= 1) Dtheta2 = (-3 * 0.69813170079773212 * x2 * x2 - 0.87266462599716477)  * dx2;
+				else		 Dtheta2 = (-3 * 0.69813170079773212 * (x2-2) * (x2-2) - 0.87266462599716477)  * dx2;
+				if (x3 <= 1) Dtheta3 = (-3 * 0.69813170079773212 * x3 * x3 - 0.87266462599716477)  * dx3;
+				else		 Dtheta3 = (-3 * 0.69813170079773212 * (x3-2) * (x3-2) - 0.87266462599716477)  * dx3;
+
+				DSOD_00 = Dtheta1 * f.SO1[0][0] + Dtheta2 * f.SO2[0][0] + Dtheta3 * f.SO3[0][0];
+				DSOD_01 = Dtheta1 * f.SO1[0][1] + Dtheta2 * f.SO2[0][1] + Dtheta3 * f.SO3[0][1];
+				DSOD_10 = Dtheta1 * f.SO1[1][0] + Dtheta2 * f.SO2[1][0] + Dtheta3 * f.SO3[1][0];
+				DSOD_11 = Dtheta1 * f.SO1[1][1] + Dtheta2 * f.SO2[1][1] + Dtheta3 * f.SO3[1][1];
+
+				if (is_orthotropic){
+					Dbend = weight * (2 * RCSurface->C[idx][0] * SOD_00*DSOD_00 + 
+									  2 * RCSurface->C[idx][1] * SOD_00*DSOD_11 + 
+									  2 * RCSurface->C[idx][1] * DSOD_00*SOD_11 + 
+									  2 * RCSurface->C[idx][2] * SOD_11*DSOD_11 + 
+									  2 * RCSurface->C[idx][3] * SOD_01*DSOD_10); 
+				}else{
+					Dbend = weight * YOUNG/(1-POISSON*POISSON)*
+								     ((1-POISSON)*(2*SOD_00*DSOD_00+2*SOD_01*DSOD_10+2*DSOD_01*SOD_10+2*SOD_11*DSOD_11)+
+						              POISSON*2*trace*(DSOD_00+DSOD_11));
+				}
+					//Dbend = weight * (2*SOD_00*DSOD_00 + 2*SOD_01*DSOD_01 + 2*SOD_10*DSOD_10 + 2*SOD_11*DSOD_11);
+
+				if (i <= 3)
+					g[f.index[i]*3+j-1] += Dbend;
+				else if (i == 4)
+					g[f.nbIdx1*3+j-1] += Dbend;
+				else if (i == 5)
+					g[f.nbIdx2*3+j-1] += Dbend;
+				else if (i == 6)
+					g[f.nbIdx3*3+j-1] += Dbend;
+			}
+		
+	}
+
+	facetBending = bending;
+	return bending;
+}
+
+lbfgsfloatval_t penalizeBendDet(const lbfgsfloatval_t *u, lbfgsfloatval_t *g){
 	double bending = 0;
 	facet* faceList = RCSurface->faceList;
 
@@ -401,7 +590,7 @@ lbfgsfloatval_t penalizeBend(const lbfgsfloatval_t *u, lbfgsfloatval_t *g){
 	for (int idx=0; idx < RCSurface->faceNum;idx++){
 		facet f = faceList[idx];
 		if (f.isBorder) continue;
-		weight = bendweight;
+		weight = f.area / RCSurface->averageArea * bendweight;
 
 		newV1 = f.v1->point() + Vector_3(u[f.index[1]*3],u[f.index[1]*3+1],u[f.index[1]*3+2]);
 		newV2 = f.v2->point() + Vector_3(u[f.index[2]*3],u[f.index[2]*3+1],u[f.index[2]*3+2]);
@@ -429,14 +618,13 @@ lbfgsfloatval_t penalizeBend(const lbfgsfloatval_t *u, lbfgsfloatval_t *g){
 		double SOD_10 = (theta1-f.theta1) * f.SO1[1][0] + (theta2-f.theta2) * f.SO2[1][0] + (theta3-f.theta3) * f.SO3[1][0];
 		double SOD_11 = (theta1-f.theta1) * f.SO1[1][1] + (theta2-f.theta2) * f.SO2[1][1] + (theta3-f.theta3) * f.SO3[1][1];
 
-		bending += weight * (SOD_00*SOD_00 + SOD_01*SOD_01 + SOD_10*SOD_10 + SOD_11*SOD_11); 
-
-// 		if ((f.index[1] == 2640)&& (f.index[2] == 2638) && (f.index[3] == 2570)){
-// 			facetBending = weight * (SOD_00*SOD_00 + SOD_01*SOD_01 + SOD_10*SOD_10 + SOD_11*SOD_11);
-// 			thetaDif1 = theta1 - f.theta1;
-// 			thetaDif2 = theta2 - f.theta2;
-// 			thetaDif3 = theta3 - f.theta3;
-// 		}
+		if (is_orthotropic)
+			bending += weight * (RCSurface->C[idx][0] * SOD_00*SOD_00 + 
+			                     2 * RCSurface->C[idx][1] * SOD_00*SOD_11 + 
+								 RCSurface->C[idx][2] * SOD_11*SOD_11 + 
+								 RCSurface->C[idx][3] * SOD_01*SOD_10); 
+		else
+			bending += weight * (SOD_00*SOD_00 + SOD_01*SOD_01 + SOD_10*SOD_10 + SOD_11*SOD_11); 
 
 		//COMPUTE GRADIENT
 
@@ -446,26 +634,20 @@ lbfgsfloatval_t penalizeBend(const lbfgsfloatval_t *u, lbfgsfloatval_t *g){
 				Dtheta1 = - computeDetGradient(i,j,newV1,newV2,newV3,newNB1,det1) / ((f.area*f.sideArea1)/f.l1);
 				Dtheta2 = - computeDetGradient(i,j,newV1,newV2,newV3,newNB2,det2) / ((f.area*f.sideArea2)/f.l2);
 				Dtheta3 = - computeDetGradient(i,j,newV1,newV2,newV3,newNB3,det3) / ((f.area*f.sideArea3)/f.l3);
-				/* */
-				/* angle based
-				int i1 = i;
-				int i2 = ((i+2)>3)? i-1 : i+2;
-				int i3 = ((i+1)>3)? i-2 : i+1;
-
-				cout<<i1<<i2<<i3;
-				cin>>i1;
-
-				Dtheta1 = computeAngleGradient(i1,j,newV1,newV2,newV3,newNB1);
-				Dtheta2 = computeAngleGradient(i2,j,newV2,newV3,newV1,newNB2);
-				Dtheta3 = computeAngleGradient(i3,j,newV3,newV1,newV2,newNB3);
-				*/
 
 				DSOD_00 = Dtheta1 * f.SO1[0][0] + Dtheta2 * f.SO2[0][0] + Dtheta3 * f.SO3[0][0];
 				DSOD_01 = Dtheta1 * f.SO1[0][1] + Dtheta2 * f.SO2[0][1] + Dtheta3 * f.SO3[0][1];
 				DSOD_10 = Dtheta1 * f.SO1[1][0] + Dtheta2 * f.SO2[1][0] + Dtheta3 * f.SO3[1][0];
 				DSOD_11 = Dtheta1 * f.SO1[1][1] + Dtheta2 * f.SO2[1][1] + Dtheta3 * f.SO3[1][1];
 
-				Dbend = weight * (2*SOD_00*DSOD_00 + 2*SOD_01*DSOD_01 + 2*SOD_10*DSOD_10 + 2*SOD_11*DSOD_11);
+				if (is_orthotropic){
+					Dbend = weight * (2 * RCSurface->C[idx][0] * SOD_00*DSOD_00 + 
+									  2 * RCSurface->C[idx][1] * SOD_00*DSOD_11 + 
+									  2 * RCSurface->C[idx][1] * DSOD_00*SOD_11 + 
+									  2 * RCSurface->C[idx][2] * SOD_11*DSOD_11 + 
+									  2 * RCSurface->C[idx][3] * SOD_01*DSOD_10); 
+				}else
+					Dbend = weight * (2*SOD_00*DSOD_00 + 2*SOD_01*DSOD_01 + 2*SOD_10*DSOD_10 + 2*SOD_11*DSOD_11);
 
 				g[f.index[i]*3+j-1] += Dbend;
 			}
@@ -480,7 +662,14 @@ lbfgsfloatval_t penalizeBend(const lbfgsfloatval_t *u, lbfgsfloatval_t *g){
 			DSOD_10 = Dtheta1 * f.SO1[1][0] + Dtheta2 * f.SO2[1][0] + Dtheta3 * f.SO3[1][0];
 			DSOD_11 = Dtheta1 * f.SO1[1][1] + Dtheta2 * f.SO2[1][1] + Dtheta3 * f.SO3[1][1];
 
-			Dbend = weight * (2*SOD_00*DSOD_00 + 2*SOD_01*DSOD_01 + 2*SOD_10*DSOD_10 + 2*SOD_11*DSOD_11);
+			if (is_orthotropic){
+				Dbend = weight * (2 * RCSurface->C[idx][0] * SOD_00*DSOD_00 + 
+								  2 * RCSurface->C[idx][1] * SOD_00*DSOD_11 + 
+								  2 * RCSurface->C[idx][1] * DSOD_00*SOD_11 + 
+								  2 * RCSurface->C[idx][2] * SOD_11*DSOD_11 + 
+								  2 * RCSurface->C[idx][3] * SOD_01*DSOD_10); 
+			}else
+				Dbend = weight * (2*SOD_00*DSOD_00 + 2*SOD_01*DSOD_01 + 2*SOD_10*DSOD_10 + 2*SOD_11*DSOD_11);
 
 			g[f.nbIdx1*3+j-1] += Dbend;
 		}
@@ -494,7 +683,14 @@ lbfgsfloatval_t penalizeBend(const lbfgsfloatval_t *u, lbfgsfloatval_t *g){
 			DSOD_10 = Dtheta1 * f.SO1[1][0] + Dtheta2 * f.SO2[1][0] + Dtheta3 * f.SO3[1][0];
 			DSOD_11 = Dtheta1 * f.SO1[1][1] + Dtheta2 * f.SO2[1][1] + Dtheta3 * f.SO3[1][1];
 
-			Dbend = weight * (2*SOD_00*DSOD_00 + 2*SOD_01*DSOD_01 + 2*SOD_10*DSOD_10 + 2*SOD_11*DSOD_11);
+			if (is_orthotropic){
+				Dbend = weight * (2 * RCSurface->C[idx][0] * SOD_00*DSOD_00 + 
+								  2 * RCSurface->C[idx][1] * SOD_00*DSOD_11 + 
+								  2 * RCSurface->C[idx][1] * DSOD_00*SOD_11 + 
+								  2 * RCSurface->C[idx][2] * SOD_11*DSOD_11 + 
+								  2 * RCSurface->C[idx][3] * SOD_01*DSOD_10); 
+			}else
+				Dbend = weight * (2*SOD_00*DSOD_00 + 2*SOD_01*DSOD_01 + 2*SOD_10*DSOD_10 + 2*SOD_11*DSOD_11);
 
 			g[f.nbIdx2*3+j-1] += Dbend;
 		}
@@ -508,7 +704,14 @@ lbfgsfloatval_t penalizeBend(const lbfgsfloatval_t *u, lbfgsfloatval_t *g){
 			DSOD_10 = Dtheta1 * f.SO1[1][0] + Dtheta2 * f.SO2[1][0] + Dtheta3 * f.SO3[1][0];
 			DSOD_11 = Dtheta1 * f.SO1[1][1] + Dtheta2 * f.SO2[1][1] + Dtheta3 * f.SO3[1][1];
 
-			Dbend = weight * (2*SOD_00*DSOD_00 + 2*SOD_01*DSOD_01 + 2*SOD_10*DSOD_10 + 2*SOD_11*DSOD_11);
+			if (is_orthotropic){
+				Dbend = weight * (2 * RCSurface->C[idx][0] * SOD_00*DSOD_00 + 
+								  2 * RCSurface->C[idx][1] * SOD_00*DSOD_11 + 
+								  2 * RCSurface->C[idx][1] * DSOD_00*SOD_11 + 
+								  2 * RCSurface->C[idx][2] * SOD_11*DSOD_11 + 
+								  2 * RCSurface->C[idx][3] * SOD_01*DSOD_10); 
+			}else
+				Dbend = weight * (2*SOD_00*DSOD_00 + 2*SOD_01*DSOD_01 + 2*SOD_10*DSOD_10 + 2*SOD_11*DSOD_11);
 
 			g[f.nbIdx3*3+j-1] += Dbend;
 		}
@@ -567,41 +770,64 @@ lbfgsfloatval_t penalizeBendQuadratic(const lbfgsfloatval_t *tu, lbfgsfloatval_t
 }
 
 lbfgsfloatval_t penalizeLink(const lbfgsfloatval_t *u, lbfgsfloatval_t *g){
+// 	float linkEnergy = 0;
+// 	float linkWeight = 50;
+// 	
+// 	for (int i = 0; i < affinityM; i++){
+// 		if (!attractor[i]) continue;
+// 
+// 		int idx1 = i;
+// 		int idx2 = linkTarget[i];
+// 
+// 		Point_3 P1 = RCSurface->vertexIndex[idx1]->point() + Vector_3(u[idx1*3],u[idx1*3+1],u[idx1*3+2]);
+// 		Point_3 P2 = RCSurface->vertexIndex[idx2]->point() + Vector_3(u[idx2*3],u[idx2*3+1],u[idx2*3+2]);
+// 		Vector_3 dis(P1,P2);
+// 
+// 		float linkLength = sqrt(dis.squared_length());
+// 		if (linkLength < 0.00001) return 0;
+// 		float a = 4;
+// 		if (linkLength < a){
+// 			linkEnergy += linkWeight * (a*a/6) * (1-pow((1-linkLength*linkLength/a/a),3));
+// 
+// 			float dB = linkWeight * linkLength * pow((1-linkLength*linkLength/a/a),2);
+// 			g[idx1*3] += dB * (- 0.5* 1 / linkLength * dis.x());
+// 			g[idx1*3+1] += dB * (- 0.5* 1 / linkLength * dis.y());
+// 			g[idx1*3+2] += dB * (- 0.5* 1 / linkLength * dis.z());
+// 
+// 			g[idx2*3] += dB * (0.5* 1 / linkLength * dis.x());
+// 			g[idx2*3+1] += dB * (0.5* 1 / linkLength * dis.y());
+// 			g[idx2*3+2] += dB * (0.5* 1 / linkLength * dis.z());
+// 		}
+// 		else{ 
+// 			linkEnergy += linkWeight * (a*a/6);
+// 		}
+// 	}
+// 	
+// 	distantLink = linkEnergy;
 	float linkEnergy = 0;
-	
-	for (int i = 0; i < affinityM; i++){
-		if (!attractor[i]) continue;
+	float linkWeight = 50;
 
-		int idx1 = i;
-		int idx2 = linkTarget[i];
+	for (int i = 0; i < RCSurface->linkNum; i++){
+		int idx1 = linkList[i].index1;
+		int idx2 = linkList[i].index2;
 
 		Point_3 P1 = RCSurface->vertexIndex[idx1]->point() + Vector_3(u[idx1*3],u[idx1*3+1],u[idx1*3+2]);
 		Point_3 P2 = RCSurface->vertexIndex[idx2]->point() + Vector_3(u[idx2*3],u[idx2*3+1],u[idx2*3+2]);
 		Vector_3 dis(P1,P2);
 
-		float linkLength = sqrt(dis.squared_length());
-		if (linkLength < 0.00001) return 0;
-		float a = 4;
-		float linkWeight = 5000;
+		double inc = sqrt(dis.squared_length()) - linkList[i].length;
 
-		if (linkLength < a){
-			linkEnergy += linkWeight * (a*a/6) * (1-pow((1-linkLength*linkLength/a/a),3));
+		linkEnergy += linkWeight * inc * inc;
 
-			float dB = linkWeight * linkLength * pow((1-linkLength*linkLength/a/a),2);
-			g[idx1*3] += dB * (- 0.5* 1 / linkLength * dis.x());
-			g[idx1*3+1] += dB * (- 0.5* 1 / linkLength * dis.y());
-			g[idx1*3+2] += dB * (- 0.5* 1 / linkLength * dis.z());
-
-			g[idx2*3] += dB * (0.5* 1 / linkLength * dis.x());
-			g[idx2*3+1] += dB * (0.5* 1 / linkLength * dis.y());
-			g[idx2*3+2] += dB * (0.5* 1 / linkLength * dis.z());
-		}
-		else{ 
-			linkEnergy += linkWeight * (a*a/6);
-		}
+		double dB = linkWeight * 2 * inc * (1/sqrt(dis.squared_length()));
+		g[idx1*3] +=   dB * 2*dis.x()* -1;
+		g[idx1*3+1] += dB * 2*dis.y()* -1;
+		g[idx1*3+2] += dB * 2*dis.z()* -1;
+		 
+		g[idx2*3] +=   dB * 2*dis.x();
+		g[idx2*3+1] += dB * 2*dis.y();
+		g[idx2*3+2] += dB * 2*dis.z();
 	}
-	
-	distantLink = linkEnergy;
 
 	return linkEnergy;
 }
@@ -627,7 +853,7 @@ lbfgsfloatval_t penalizaeLandmark(const lbfgsfloatval_t *u, lbfgsfloatval_t *g){
 	return fx;
 }
 
-double computeStretchGradient(int n,int m,int x,int y){
+inline double computeStretchGradient(int n,int m,int x,int y){
 	if (x == 1){
 		if (m != y) return 0; else return -1;
 	}else if (x == 2){
@@ -639,73 +865,66 @@ double computeStretchGradient(int n,int m,int x,int y){
 	}
 }
 
-double computeAngleGradient(int i,int j,Point_3 V1,Point_3 V2,Point_3 V3,Point_3 V4){
-	Vector_3 v1(V1,V4);
-	Vector_3 v2(V1,V2);
-	Vector_3 v3(V1,V3);
+inline threeTuple computeGradient(int v,int i,int j){
+	if (v <= 3){ // computing derivatives w.r.t. b1,b2,b3
+		if (i>3) return threeTuple(0,0,0);
 
-	Vector_3 n2 = cross_product(v2,v3);
-	double sm2 = n2.squared_length();
-	double sq2 = sqrt(sm2);
-	double p1 = v1*n2;
-	double dis1 = p1/sq2;
+		if (v == i){
+			if (j == 1) return threeTuple(-1,0,0);
+			if (j == 2) return threeTuple(0,-1,0);
+			if (j == 3) return threeTuple(0,0,-1);
+		}
+		
+		if ((v+1 == i) || (v-2 == i)){
+			if (j == 1) return threeTuple(1,0,0);
+			if (j == 2) return threeTuple(0,1,0);
+			if (j == 3) return threeTuple(0,0,1);
+		}
+		
+		return threeTuple(0,0,0);
+	}
 
-	double v1v2 = v1*v2;
-	double sqv2 = sqrt(v2.squared_length());
-	double p2 = v1v2/sqv2;
-	double dis2 = sqrt(v1.squared_length()-p2*p2);
+	if (v-3 == i){
+		if (j == 1) return threeTuple(-1,0,0);
+		if (j == 2) return threeTuple(0,-1,0);
+		if (j == 3) return threeTuple(0,0,-1);
+	}
 
-	/* gradient */
+	if (v == i){
+		if (j == 1) return threeTuple(1,0,0);
+		if (j == 2) return threeTuple(0,1,0);
+		if (j == 3) return threeTuple(0,0,1);
+	}
 
-	double dn2x,dn2y,dn2z,dsm2,dsq2,dp1,ddis1,dtheta,dsv2,dsqv2,dv1v2,dp2,ddis2;
-	double dv1x,dv1y,dv1z,dv2x,dv2y,dv2z,dv3x,dv3y,dv3z;
-
-	dv1x = computeGradient(1,1,i,j);dv1y = computeGradient(1,2,i,j); dv1z = computeGradient(1,3,i,j);
-	dv2x = computeGradient(2,1,i,j);dv2y = computeGradient(2,2,i,j); dv2z = computeGradient(2,3,i,j);
-	dv3x = computeGradient(3,1,i,j);dv3y = computeGradient(3,2,i,j); dv3z = computeGradient(3,3,i,j);
-
-	dn2x = (dv2y*v3.z()+v2.y()*dv3z)-(dv2z*v3.y()+v2.z()*dv3y);
-	dn2y = (dv2z*v3.x()+v2.z()*dv3x)-(dv2x*v3.z()+v2.x()*dv3z);
-	dn2z = (dv2x*v3.y()+v2.x()*dv3y)-(dv2y*v3.x()+v2.y()*dv3x);
-
-	dsm2 = 2*n2.x()*dn2x + 2*n2.y()*dn2y + 2*n2.z()*dn2z;
-	dsq2 = 0.5 * 1 / sq2 * dsm2;
-
-	dp1 = (dv1x*n2.x()+v1.x()*dn2x) + (dv1y*n2.y()+v1.y()*dn2y) + (dv1z*n2.z()+v1.z()*dn2z);
-	ddis1 = (dp1*sq2-p1*dsq2)/(sq2*sq2);
-	
-	//
-	dsv2 = 2*v2.x()*dv2x + 2*v2.y()*dv2y + 2*v2.z()*dv2z;
-	dsqv2 = 0.5 * 1 / sqv2 * dsv2;
-
-	dv1v2 = (dv1x*v2.x()+v1.x()*dv2x) + (dv1y*v2.y()+v1.y()*dv2y) + (dv1z*v2.z()+v1.z()*dv2z);
-	dp2 = (dv1v2*sqv2 - v1v2*dsqv2)/v2.squared_length();
-
-	ddis2 = 0.5 * 1 / dis2 *(2*v1.x()*dv1x + 2*v1.y()*dv1y + 2*v1.z()*dv1z-2*p2*dp2);
-
-	return (ddis1*dis2-dis1*ddis2)/(dis2*dis2);
+	return threeTuple(0,0,0);
 }
 
-double computeGradient(int n,int nd,int e,int ed){
-	if (nd != ed) return 0;
+inline threeTuple computeCrossProductGradient(Vector_3 b1,Vector_3 b2,threeTuple db1,threeTuple db2){
+	double dx = (db1.y*b2.z()+b1.y()*db2.z)-(db1.z*b2.y()+b1.z()*db2.y);
+	double dy = (db1.z*b2.x()+b1.z()*db2.x)-(db1.x*b2.z()+b1.x()*db2.z);
+	double dz = (db1.x*b2.y()+b1.x()*db2.y)-(db1.y*b2.x()+b1.y()*db2.x);
 
-	if (n == 1){
-		if (e == 1) return -1;
-		else if (e == 4) return 1;
-		else return 0;
-	}
-	else if (n == 2){
-		if (e == 1) return -1;
-		else if (e == 2) return 1;
-		else return 0;
-	}
-	else if (n == 3){
-		if (e == 1) return -1;
-		else if (e == 3) return 1;
-		else return 0;
-	}
+	return threeTuple(dx,dy,dz);
+}
 
-	return 0;
+inline double computeDotProductGradient(Vector_3 n1,Vector_3 n2,threeTuple dn1,threeTuple dn2){
+	double g = n1*n2;
+	double dg = dn1.x*n2.x() + n1.x()*dn2.x +
+				dn1.y*n2.y() + n1.y()*dn2.y +
+				dn1.z*n2.z() + n1.z()*dn2.z;
+
+	double N1 = n1.squared_length() + EPS;
+	double N2 = n2.squared_length() + EPS;
+	double N1N2 = N1*N2;
+
+	double dN1 = 2*n1.x()*dn1.x + 2*n1.y()*dn1.y + 2*n1.z()*dn1.z;
+	double dN2 = 2*n2.x()*dn2.x + 2*n2.y()*dn2.y + 2*n2.z()*dn2.z;
+
+	double dN1N2 = dN1*N2 + N1*dN2;
+
+	double dSN1N2 = 0.5*dN1N2/sqrt(N1N2);
+
+	return (sqrt(N1N2)*dg - dSN1N2*g)/(N1N2);
 }
 
 double computeDetGradient(int i,int j,Point_3 v1,Point_3 v2,Point_3 v3,Point_3 v4,double* det){

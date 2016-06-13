@@ -384,23 +384,122 @@ void computeStatisticBool(BasicMesh* mesh1,BasicMesh* mesh2,float& initialE,floa
 }
 
 float computeAngle(Point_3 V1,Point_3 V2,Point_3 V3,Point_3 V4){
-	Vector_3 v1(V1,V4);
-	Vector_3 v2(V1,V2);
-	Vector_3 v3(V1,V3);
+	double theta1;
 
-	Vector_3 n2 = cross_product(v2,v3);
-	double sm2 = n2.squared_length();
-	double sq2 = sqrt(sm2);
-	double p1 = v1*n2;
-	double dis1 = p1/sq2;
+	Vector_3 b1(V1,V2);
+	Vector_3 b2(V2,V3);
+	Vector_3 s1(V1,V4);
 
-	double p2 = (v1*v2)/sqrt(v2.squared_length());
-	double dis2 = sqrt(v1.squared_length()-p2*p2);
-	
-	return dis1/dis2;
+	Vector_3 nm = cross_product(b1,b2);
+	Vector_3 n1 = cross_product(s1,b1);
+
+	double sign1 = s1*nm;
+	double x1 = n1*nm / (sqrt(n1.squared_length()+EPS)*sqrt(nm.squared_length()+EPS));
+	if (sign1 > 0) x1 = (2 - x1);
+
+	if (x1 <= 1) theta1 = (-0.69813170079773212 * x1 * x1 - 0.87266462599716477) * x1 + 1.5707963267948966;
+	else	     theta1 = (-0.69813170079773212 * (x1-2) * (x1-2) - 0.87266462599716477) * (x1-2) - 1.5707963267948966;
+
+	return theta1;
 }
 
 double computeAngle(Vector_3 v1,Vector_3 v2){
 	double costheta = v1*v2/(sqrt(v1.squared_length())*sqrt(v2.squared_length()));
 	return acos(costheta);
+}
+
+Vector_3 closesPointOnTriangle(const Vector_3 *triangle, const Vector_3 &sourcePosition ){
+		Vector_3 edge0 = triangle[1] - triangle[0];
+		Vector_3 edge1 = triangle[2] - triangle[0];
+		Vector_3 v0 = triangle[0] - sourcePosition;
+
+		float a = edge0 * edge0;
+		float b = edge0 * edge1;
+		float c = edge1 * edge1;
+		float d = edge0 * v0;
+		float e = edge1 * v0;
+
+		float det = a*c - b*b;
+		float s   = b*e - c*d;
+		float t   = b*d - a*e;
+
+		if ( s + t < det )
+		{
+			if ( s < 0.f )
+			{
+				if ( t < 0.f )
+				{
+					if ( d < 0.f )
+					{
+						s = clamp_zenyo( -d/a, 0.f, 1.f );
+						t = 0.f;
+					}
+					else
+					{
+						s = 0.f;
+						t = clamp_zenyo( -e/c, 0.f, 1.f );
+					}
+				}
+				else
+				{
+					s = 0.f;
+					t = clamp_zenyo( -e/c, 0.f, 1.f );
+				}
+			}
+			else if ( t < 0.f )
+			{
+				s = clamp_zenyo( -d/a, 0.f, 1.f );
+				t = 0.f;
+			}
+			else
+			{
+				float invDet = 1.f / det;
+				s *= invDet;
+				t *= invDet;
+			}
+		}
+		else
+		{
+			if ( s < 0.f )
+			{
+				float tmp0 = b+d;
+				float tmp1 = c+e;
+				if ( tmp1 > tmp0 )
+				{
+					float numer = tmp1 - tmp0;
+					float denom = a-2*b+c;
+					s = clamp_zenyo( numer/denom, 0.f, 1.f );
+					t = 1-s;
+				}
+				else
+				{
+					t = clamp_zenyo( -e/c, 0.f, 1.f );
+					s = 0.f;
+				}
+			}
+			else if ( t < 0.f )
+			{
+				if ( a+d > b+e )
+				{
+					float numer = c+e-b-d;
+					float denom = a-2*b+c;
+					s = clamp_zenyo( numer/denom, 0.f, 1.f );
+					t = 1-s;
+				}
+				else
+				{
+					s = clamp_zenyo( -e/c, 0.f, 1.f );
+					t = 0.f;
+				}
+			}
+			else
+			{
+				float numer = c+e-b-d;
+				float denom = a-2*b+c;
+				s = clamp_zenyo( numer/denom, 0.f, 1.f );
+				t = 1.f - s;
+			}
+		}
+
+		return triangle[0] + s * edge0 + t * edge1;
 }

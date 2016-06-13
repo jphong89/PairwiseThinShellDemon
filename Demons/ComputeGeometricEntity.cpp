@@ -161,6 +161,7 @@ BasicMesh::BasicMesh(string filename,string tagt,string PName,string PNum){
 	edgeList = NULL;
 	linkList  = NULL;
 	vertexList = NULL;
+	frameInfo = NULL;
 
 	dirNum = 8;
 }
@@ -197,68 +198,84 @@ int BasicMesh::ComputeMeshProperty(string filename){
 	PolyhedralSurf::Vertex_const_iterator ve = P.vertices_end();
 	PolyhedralSurf::Vertex_const_handle vh,minh;
 
-	ofstream fout;
-	fout.open(if_name+"curvature.txt");
 	for (int i = 0; vb != ve; vb++,i++){
 		vh = vb;
 		indexMap.insert(pair<Vertex_const_handle,int>(vh,i));
 		vertexIndex[i] = vh;
-
-		float k1 = vertex2k1_map[vh];
-		float k2 = vertex2k2_map[vh];
-
-		float k = sqrt(k1*k1+k2*k2);
-		fout<<k<<endl;
 	}
-	fout.close();
 	
 	/* translate surfaces (per faceet) */
+	faceNum = (int)P.size_of_facets();
+	vertexNum = (int)P.size_of_vertices();
+	edgeNum = (int)P.size_of_halfedges();
+
+	if (is_orthotropic && tag == "origin") constructOrthotropic(); 
 	translateMesh(vertex2k1_pm,vertex2k2_pm);
 
 	return 1;
 }
 
-void BasicMesh::ComputeStretchInverse(Vertex_const_handle v1,Vertex_const_handle v2,Vertex_const_handle v3,facet* face){
-	Vector_3 temp_v1(v1->point(),v2->point());
-	Vector_3 temp_v2(v1->point(),v3->point());
+void BasicMesh::ComputeStretchInverse(Vertex_const_handle v1,Vertex_const_handle v2,Vertex_const_handle v3,facet* face,int i){
+	if (is_orthotropic && tag == "origin"){
+		Vector_3 temp_v1(v1->point(),v2->point());
+		Vector_3 temp_v2(v2->point(),v3->point());
+		Vector_3 temp_v3(v3->point(),v1->point());
 
-	double temp_v1_1 = 0;
-	double temp_v1_2 = sqrt(temp_v1.squared_length()+EPS);
+		face->local_v1 = Vector_2(temp_v1*Vector_3(X[i][0],X[i][1],X[i][2]),temp_v1*Vector_3(Y[i][0],Y[i][1],Y[i][2]));
+		face->local_v2 = Vector_2(temp_v2*Vector_3(X[i][0],X[i][1],X[i][2]),temp_v2*Vector_3(Y[i][0],Y[i][1],Y[i][2]));
+		face->local_v3 = Vector_2(temp_v3*Vector_3(X[i][0],X[i][1],X[i][2]),temp_v3*Vector_3(Y[i][0],Y[i][1],Y[i][2]));
 
-	double temp_v2_2 = temp_v1*temp_v2/temp_v1_2;
+		face->t1 = Vector_2(face->local_v1.y(),-face->local_v1.x());
+		face->t2 = Vector_2(face->local_v2.y(),-face->local_v2.x());
+		face->t3 = Vector_2(face->local_v3.y(),-face->local_v3.x());
 
-	double sqv21 = temp_v2.squared_length() - temp_v2_2*temp_v2_2;
-	double temp_v2_1 = - sqrt(sqv21 + EPS);
+		double temp_scale = 1/(- face->local_v1.x() * face->local_v3.y() + face->local_v1.y()*face->local_v3.x());
+		face->inverse[0][0] = -face->local_v3.y() * temp_scale;
+		face->inverse[0][1] = face->local_v3.x() * temp_scale;
+		face->inverse[1][0] = -face->local_v1.y() * temp_scale;
+		face->inverse[1][1] = face->local_v1.x() * temp_scale;
+	}else{
+		Vector_3 temp_v1(v1->point(),v2->point());
+		Vector_3 temp_v2(v1->point(),v3->point());
 
-	//local parametrization of vectors
-	face->local_v1 = Vector_2(temp_v1_1,temp_v1_2);
-	face->local_v2 = Vector_2(temp_v2_1,temp_v2_2-temp_v1_2);
-	face->local_v3 = Vector_2(-temp_v2_1,-temp_v2_2);
+		double temp_v1_1 = 0;
+		double temp_v1_2 = sqrt(temp_v1.squared_length()+EPS);
 
-	face->t1 = Vector_2(temp_v1_2,-temp_v1_1);
-	face->t2 = Vector_2(temp_v2_2-temp_v1_2,-temp_v2_1);
-	face->t3 = Vector_2(-temp_v2_2,temp_v2_1);
+		double temp_v2_2 = temp_v1*temp_v2/temp_v1_2;
 
-	//stretch inverse matrix
-	double temp_scale = 1/(temp_v1_1*temp_v2_2-temp_v1_2*temp_v2_1);
-	face->inverse[0][0] = temp_v2_2 * temp_scale;
-	face->inverse[0][1] = -temp_v2_1 * temp_scale;
-	face->inverse[1][0] = -temp_v1_2 * temp_scale;
-	face->inverse[1][1] = temp_v1_1 * temp_scale;
+		double sqv21 = temp_v2.squared_length() - temp_v2_2*temp_v2_2;
+		double temp_v2_1 = - sqrt(sqv21 + EPS);
+
+		//local parametrization of vectors
+		face->local_v1 = Vector_2(temp_v1_1,temp_v1_2);
+		face->local_v2 = Vector_2(temp_v2_1,temp_v2_2-temp_v1_2);
+		face->local_v3 = Vector_2(-temp_v2_1,-temp_v2_2);
+
+		face->t1 = Vector_2(temp_v1_2,-temp_v1_1);
+		face->t2 = Vector_2(temp_v2_2-temp_v1_2,-temp_v2_1);
+		face->t3 = Vector_2(-temp_v2_2,temp_v2_1);
+
+		//stretch inverse matrix
+		double temp_scale = 1/(temp_v1_1*temp_v2_2-temp_v1_2*temp_v2_1);
+		face->inverse[0][0] = temp_v2_2 * temp_scale;
+		face->inverse[0][1] = -temp_v2_1 * temp_scale;
+		face->inverse[1][0] = -temp_v1_2 * temp_scale;
+		face->inverse[1][1] = temp_v1_1 * temp_scale;
+	}
+	
 }
 
 void BasicMesh::ComputeShapeOperator(facet* face){
 	/* determinant based */
-	face->theta1 = -computeDeterminant(face->v1,face->v2,face->v3,face->nb1) / ((face->area*face->sideArea1)/face->l1);
-	face->theta2 = -computeDeterminant(face->v1,face->v2,face->v3,face->nb2) / ((face->area*face->sideArea2)/face->l2);
-	face->theta3 = -computeDeterminant(face->v1,face->v2,face->v3,face->nb3) / ((face->area*face->sideArea3)/face->l3);
+// 	face->theta1 = -computeDeterminant(face->v1,face->v2,face->v3,face->nb1) / ((face->area*face->sideArea1)/face->l1);
+// 	face->theta2 = -computeDeterminant(face->v1,face->v2,face->v3,face->nb2) / ((face->area*face->sideArea2)/face->l2);
+// 	face->theta3 = -computeDeterminant(face->v1,face->v2,face->v3,face->nb3) / ((face->area*face->sideArea3)/face->l3);
 	/* & */
 
-	/* anlge based
+	/* anlge based */
 	face->theta1 = computeAngle(face->v1->point(),face->v2->point(),face->v3->point(),face->nb1->point());
 	face->theta2 = computeAngle(face->v2->point(),face->v3->point(),face->v1->point(),face->nb2->point());
 	face->theta3 = computeAngle(face->v3->point(),face->v1->point(),face->v2->point(),face->nb3->point());
-	*/
 
 	face->SO1[0][0] = face->t1.x() * face->t1.x() / (2*face->area*face->l1);
 	face->SO1[0][1] = face->t1.x() * face->t1.y() / (2*face->area*face->l1);
@@ -277,13 +294,9 @@ void BasicMesh::ComputeShapeOperator(facet* face){
 }
 
 void BasicMesh::translateMesh(Vertex2FT_property_map vertex2k1_pm,Vertex2FT_property_map vertex2k2_pm){
-	faceNum = (int)P.size_of_facets();
-	vertexNum = (int)P.size_of_vertices();
-	edgeNum = (int)P.size_of_halfedges();
-
 	if (faceList != NULL) delete []faceList;
 	faceList = new facet[faceNum];
-
+	averageArea = 0;
 	std::map<Facet_const_handle, int> facetMap;
 
 	PolyhedralSurf::Facet_const_iterator itfb = P.facets_begin();
@@ -296,6 +309,7 @@ void BasicMesh::translateMesh(Vertex2FT_property_map vertex2k1_pm,Vertex2FT_prop
 		Vector_3 fnorm = f->getUnitNormal();
 		faceList[i].normal = threeTuple(fnorm);
 		faceList[i].area = computeArea(f);
+		averageArea += faceList[i].area;
 
 		PolyhedralSurf::Halfedge_const_handle h1 = f->halfedge();
 		PolyhedralSurf::Vertex_const_handle v1 = h1->vertex();
@@ -327,7 +341,7 @@ void BasicMesh::translateMesh(Vertex2FT_property_map vertex2k1_pm,Vertex2FT_prop
 		faceList[i].p3 = threeTuple(v3->point());
 
 		//compute stretch inverse matrix
-		ComputeStretchInverse(v1,v2,v3,&faceList[i]);
+		ComputeStretchInverse(v1,v2,v3,&faceList[i],i);
 
 		faceList[i].l1 = sqrt(faceList[i].local_v1.squared_length());
 		faceList[i].l2 = sqrt(faceList[i].local_v2.squared_length());
@@ -340,6 +354,7 @@ void BasicMesh::translateMesh(Vertex2FT_property_map vertex2k1_pm,Vertex2FT_prop
 		else
 			ComputeShapeOperator(&faceList[i]);
 	}
+	averageArea = averageArea / faceNum;
 
 	itfb = P.facets_begin();
 	itfe = P.facets_end();
@@ -551,7 +566,7 @@ void BasicMesh::constructEdgeList(){
 
 void BasicMesh::constructLink(){
 	ifstream file;
-	file.open(link_name);
+	file.open("link.txt");
 
 	file>>linkNum;
 
@@ -715,4 +730,67 @@ void BasicMesh::constructLandmark(string filename){
 		landmark[i] = int(temp);
 	}
 	fin.close();
+}
+
+void BasicMesh::constructOrthotropic(){
+	X = new double*[faceNum];
+	Y = new double*[faceNum];
+	C = new double*[faceNum];
+
+	for (int i = 0; i < faceNum; i++){
+		X[i] = new double[3];
+		Y[i] = new double[3];
+		C[i] = new double[4];
+	}
+
+	ifstream fin;
+	fin.open("X.txt");
+
+	for (int i = 0; i< faceNum; i++){
+		double tx,ty,tz;
+		fin>>tx>>ty>>tz;
+		X[i][0] = tx;
+		X[i][1] = ty;
+		X[i][2] = tz;
+	}
+
+	fin.close();
+	fin.open("Y.txt");
+
+	for (int i = 0; i< faceNum; i++){
+		double tx,ty,tz;
+		fin>>tx>>ty>>tz;
+		Y[i][0] = tx;
+		Y[i][1] = ty;
+		Y[i][2] = tz;
+	}
+
+	fin.close();
+	fin.open("C.txt");
+
+	for (int i = 0; i< faceNum; i++){
+		double tu,tx,ty,tz;
+		fin>>tx>>ty>>tz>>tu;
+		C[i][0] = tx;
+		C[i][1] = ty;
+		C[i][2] = tz;
+		C[i][3] = tu;
+	}
+
+	fin.close();
+}
+
+void BasicMesh::constructInitialFrameInfo(){
+	if (frameInfo != NULL) delete []frameInfo;
+	frameInfo = new facet[faceNum];
+
+	PolyhedralSurf::Facet_const_iterator itfb = P.facets_begin();
+	PolyhedralSurf::Facet_const_iterator itfe = P.facets_end();
+
+	for (int i = 0;itfb != itfe; itfb++,i++){
+		frameInfo[i].inverse[0][0] = faceList[i].inverse[0][0];
+		frameInfo[i].inverse[0][1] = faceList[i].inverse[0][1];
+		frameInfo[i].inverse[1][0] = faceList[i].inverse[1][0];
+		frameInfo[i].inverse[1][1] = faceList[i].inverse[1][1];
+	}
 }

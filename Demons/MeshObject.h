@@ -55,7 +55,7 @@ extern double* affinity;
 extern int affinityM;
 extern int affinityN;
 extern lbfgsfloatval_t* u;
-extern int* bestMatch;
+extern Vector_3* bestMatch;
 extern double bendweight;
 extern double regweight;
 extern float* matchWeight;
@@ -311,7 +311,7 @@ public:
 	/* geometric feature */
 	int ComputeMeshProperty(string if_name);
 	void translateMesh(Vertex2FT_property_map vertex2k1_pm,Vertex2FT_property_map vertex2k2_pm); // compute facet information
-	void ComputeStretchInverse(Vertex_const_handle v1,Vertex_const_handle v2,Vertex_const_handle v3,facet* face);
+	void ComputeStretchInverse(Vertex_const_handle v1,Vertex_const_handle v2,Vertex_const_handle v3,facet* face,int idx = 0);
 	void ComputeShapeOperator(facet* face);
 
 	Vertex_const_handle marchOnSurface(PolyhedralSurf::Halfedge_const_handle,PolyhedralSurf::Facet_const_handle,Vector_3,float,float,float,int,threeTuple*); // geodesic marching
@@ -337,6 +337,8 @@ public:
 	void constructAttractor();
 	void constructOccluded();
 	void constructLandmark(string filename);
+	void constructOrthotropic();
+	void constructInitialFrameInfo();
 
 	/*REGISTRATION*/
 	void findCorrespondenceBothWay(BasicMesh*,double); //compute feature similarity based on euc dis & curvatures3
@@ -354,9 +356,15 @@ public:
 	/* registration data structure */
 	Vertex_const_handle matched;
 	facet* faceList;
+	facet* frameInfo;
 	edge* edgeList;
 	vertex* vertexList;
 	int* landmark;
+	double** X;
+	double** Y;
+	double** C;
+	double averageArea;
+	double* pta;
 
 	/* supporting data structure */
 	threeTuple* marchList[8];
@@ -386,6 +394,7 @@ double* computeDeterminant(Point_3 v1,Point_3 v2,Point_3 v3,Point_3 v4);
 void computeStatisticBool(BasicMesh*,BasicMesh*,float&,float&,float&,float&, float&);
 float computeAngle(Point_3 V1,Point_3 V2,Point_3 V3,Point_3 V4);
 double computeAngle(Vector_3 v1,Vector_3 v2);
+Vector_3 closesPointOnTriangle( const Vector_3 *triangle, const Vector_3 &sourcePosition );
 
 extern char* patientNum;
 extern char* caseNum;

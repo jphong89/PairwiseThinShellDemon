@@ -13,9 +13,10 @@
 #define VAL(SA,ia,ja,na) SA[(ia)*(na)+(ja)]
 
 #define PI 3.141592654
-#define EPS (1e-6)
+#define EPS (1e-16)
 #define max_zenyo(a,b)            (((a) > (b)) ? (a) : (b))
 #define min_zenyo(a,b)            (((a) < (b)) ? (a) : (b))
+#define clamp_zenyo(x,y,z)              (min_zenyo(max_zenyo((x),(y)),(z)))
 
 //#define EUCLWEIGHT 1
 #define DIR_NUM 8
@@ -46,5 +47,6 @@ extern double DISTHRESHOLD; // we don't want to match things too far away
 extern double EUCLWEIGHT;
 extern int MESHLABOPTION;
 extern double LANDMARKWEIGHT;
+extern bool is_orthotropic;
 
 // TODO: reference additional headers your program requires here

@@ -1,4 +1,5 @@
-#pragma once
+#ifndef __MESHOBJECT_H__
+#define __MESHOBJECT_H__
 
 #include <CGAL/Cartesian.h>
 #include <CGAL/Ridges.h>
@@ -419,3 +420,5 @@ extern float initialBoundError;
 extern float initialBoundVar;
 
 extern float maxInitialError;
+
+#endif // __MESHOBJECT_H__

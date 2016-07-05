@@ -2,18 +2,15 @@
 // or project specific include files that are used frequently, but
 // are changed infrequently
 //
-
-#pragma once
-
-#include "targetver.h"
+#ifndef __STDAFX_H__
+#define __STDAFX_H__
 
 #include <stdio.h>
-#include <tchar.h>
 
 #define VAL(SA,ia,ja,na) SA[(ia)*(na)+(ja)]
 
-#define PI 3.141592654
-#define EPS (1e-16)
+const double PI  = 3.141592654;
+const double EPS = 1e-6;
 #define max_zenyo(a,b)            (((a) > (b)) ? (a) : (b))
 #define min_zenyo(a,b)            (((a) < (b)) ? (a) : (b))
 #define clamp_zenyo(x,y,z)              (min_zenyo(max_zenyo((x),(y)),(z)))
@@ -50,3 +47,4 @@ extern double LANDMARKWEIGHT;
 extern bool is_orthotropic;
 
 // TODO: reference additional headers your program requires here
+#endif // __STDAFX_H__

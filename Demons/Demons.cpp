@@ -29,7 +29,7 @@ bool is_orthotropic = false;
 BasicMesh* CTSurface;
 BasicMesh* RCSurface;
 
-link* linkList;
+struct link* linkList;
 bool* attractor;
 bool* attractee;
 int* linkTarget;
@@ -51,7 +51,7 @@ double regweight;
 double facetBending = 0;
 double facetStretching = 0;
 double distantLink = 0;
-LARGE_INTEGER t1,t2,tc;
+//LARGE_INTEGER t1,t2,tc;
 double thetaDif1,thetaDif2,thetaDif3;
 double facetTrace,facetDet;
 
@@ -90,160 +90,160 @@ float maxInitialError;
 
 /* initialize memeory */
 void initialMemeoryForGlobalVariables(){
-	//initial affinity map
-	affinity = new double[affinityM * affinityN];
-	memset(affinity,0,affinityM * affinityN * sizeof(double));
-	//initial best match location
-	bestMatch = new Vector_3[affinityM];
-	for (int i = 0; i < affinityM; i++) bestMatch[i]=Vector_3(0,0,0);	
-	//initial match confidence
-	matchWeight = new float[affinityM];
-	memset(matchWeight,0,sizeof(float)*affinityM);
-	//initial attractor
-	attractor = new bool[affinityM];
-	memset(attractor,false,affinityM * sizeof(bool));
-	//initial attractee
-	attractee = new bool[affinityM];
-	memset(attractee,false,affinityM * sizeof(bool));
-	//initial linkTarget
-	linkTarget = new int[affinityM];
-	memset(linkTarget,0,affinityM * sizeof(int));
-	//initial occluded region
-	occluded = new bool[affinityM];
-	memset(occluded,false,affinityM * sizeof(bool));
-	//initial statisticalBool
-	statisticBool = new bool[affinityN];
-	memset(statisticBool,false,sizeof(bool)*affinityN);
-	isBoundary = new bool[affinityN];
-	memset(isBoundary,false,sizeof(bool)*affinityN);
-	//initial DVF
-	u = lbfgs_malloc(affinityM * 3);
-	memset(u,0,sizeof(lbfgsfloatval_t)*affinityM*3);
+    //initial affinity map
+    affinity = new double[affinityM * affinityN];
+    memset(affinity,0,affinityM * affinityN * sizeof(double));
+    //initial best match location
+    bestMatch = new Vector_3[affinityM];
+    for (int i = 0; i < affinityM; i++) bestMatch[i]=Vector_3(0,0,0);	
+    //initial match confidence
+    matchWeight = new float[affinityM];
+    memset(matchWeight,0,sizeof(float)*affinityM);
+    //initial attractor
+    attractor = new bool[affinityM];
+    memset(attractor,false,affinityM * sizeof(bool));
+    //initial attractee
+    attractee = new bool[affinityM];
+    memset(attractee,false,affinityM * sizeof(bool));
+    //initial linkTarget
+    linkTarget = new int[affinityM];
+    memset(linkTarget,0,affinityM * sizeof(int));
+    //initial occluded region
+    occluded = new bool[affinityM];
+    memset(occluded,false,affinityM * sizeof(bool));
+    //initial statisticalBool
+    statisticBool = new bool[affinityN];
+    memset(statisticBool,false,sizeof(bool)*affinityN);
+    isBoundary = new bool[affinityN];
+    memset(isBoundary,false,sizeof(bool)*affinityN);
+    //initial DVF
+    u = lbfgs_malloc(affinityM * 3);
+    memset(u,0,sizeof(lbfgsfloatval_t)*affinityM*3);
 }
 
 int main(int argc, char* argv[])
 {
-	char* filename1;
-	char* filename2;
-	char* landmark1; //landmark1
-	char* landmark2; //landmark2
+    char* filename1;
+    char* filename2;
+    char* landmark1; //landmark1
+    char* landmark2; //landmark2
 
-	//format: demons.exe surface1.off surface2.off weight_output.txt landmark1.txt landmark2.txt
-	if (argc > 2){
-		filename1 = argv[1];
-		filename2 = argv[2];
-		
-		if (argc > 3) {
-			REGWEIGHT = atof(argv[3]);
-			BENDWEIGHT = atof(argv[4]);
-		}
+    //format: demons.exe surface1.off surface2.off weight_output.txt landmark1.txt landmark2.txt
+    if (argc > 2){
+        filename1 = argv[1];
+        filename2 = argv[2];
 
-		if (argc > 5) DISTHRESHOLD = atof(argv[5]);
-		if (argc > 6) EUCLWEIGHT = atof(argv[6]);
-		
-		if (argc > 7) {
-			YOUNG = atof(argv[7]);
-			POISSON = atof(argv[8]);
-			if (YOUNG < 0 || POISSON < 0) is_orthotropic = true;
-		}
+        if (argc > 3) {
+            REGWEIGHT = atof(argv[3]);
+            BENDWEIGHT = atof(argv[4]);
+        }
 
-		if (argc > 9) {
-			MESHLABOPTION = atoi(argv[9]);
-		}
+        if (argc > 5) DISTHRESHOLD = atof(argv[5]);
+        if (argc > 6) EUCLWEIGHT = atof(argv[6]);
 
-		if (argc > 10) {
-			landmark1 = argv[10];
-			landmark2 = argv[11];
-			LANDMARKWEIGHT = atof(argv[12]);
-		}
+        if (argc > 7) {
+            YOUNG = atof(argv[7]);
+            POISSON = atof(argv[8]);
+            if (YOUNG < 0 || POISSON < 0) is_orthotropic = true;
+        }
 
-		patientNum = new char[20]; //manually designate object name
-		caseNum = new char[20];	//manually designate case number
+        if (argc > 9) {
+            MESHLABOPTION = atoi(argv[9]);
+        }
 
-		cout<<"STRETCHING WEIGHT: "<<REGWEIGHT<<" -BENDING WEIGHT: "<<BENDWEIGHT<<" -EUCLIDEAN THRESHOLD: "
-			<<DISTHRESHOLD<<" -GEOMETRIC FEATURE WEIGHT: "<<EUCLWEIGHT
-			<<" -YOUNG: "<<YOUNG<<" -POSSION: "<<POISSON<<" -MESHLAB: "<<MESHLABOPTION<<endl;
-	}else{
-		patientNum = new char[20]; //manully designate object name
-		caseNum = new char[20];
+        if (argc > 10) {
+            landmark1 = argv[10];
+            landmark2 = argv[11];
+            LANDMARKWEIGHT = atof(argv[12]);
+        }
 
-		patientNum = "5708_partial2";//manually designate object name
-		caseNum = "2";//manually designate index number
+        patientNum = new char[20]; //manually designate object name
+        caseNum = new char[20];	//manually designate case number
 
-		////////////////////////////////////////* read files */////////////////////////////////
+        cout<<"STRETCHING WEIGHT: "<<REGWEIGHT<<" -BENDING WEIGHT: "<<BENDWEIGHT<<" -EUCLIDEAN THRESHOLD: "
+            <<DISTHRESHOLD<<" -GEOMETRIC FEATURE WEIGHT: "<<EUCLWEIGHT
+            <<" -YOUNG: "<<YOUNG<<" -POSSION: "<<POISSON<<" -MESHLAB: "<<MESHLABOPTION<<endl;
+    }else{
+        patientNum = new char[20]; //manully designate object name
+        caseNum = new char[20];
 
-		strcat(filename1,patientNum);
-		strcat(filename1,"/");
-		strcat(filename1,caseNum);
-		strcat(filename1,"_origin.off");
+        patientNum = "5708_partial2";//manually designate object name
+        caseNum = "2";//manually designate index number
 
-		strcat(filename2,patientNum);
-		strcat(filename2,"/");
-		strcat(filename2,caseNum);
-		strcat(filename2,"_deformed.off");
-	}
+        ////////////////////////////////////////* read files */////////////////////////////////
 
-	////////////////////////////////////*read & translate surfaces */////////////////////////////////////////////
-	cout<<"Begin Constructing First Mesh: "<<filename1<<endl;
-	RCSurface = new BasicMesh(filename1,"origin",patientNum,caseNum);
-	RCSurface->ComputeMeshProperty(filename1);
-	if (argc > 10) RCSurface->constructLandmark(landmark1);
-	if (is_orthotropic){
-		cout<<"computing orthotropic case..."<<endl;
-		RCSurface->constructOrthotropic(); 
-	
-	}
-	cout<<"Begin Construction Second Mesh: "<<filename2<<endl;
-	CTSurface = new BasicMesh(filename2,"deformed",patientNum,caseNum);
-	CTSurface->ComputeMeshProperty(filename2);
-	if (argc > 10) CTSurface->constructLandmark(landmark2);
+        strcat(filename1,patientNum);
+        strcat(filename1,"/");
+        strcat(filename1,caseNum);
+        strcat(filename1,"_origin.off");
 
-	affinityM = RCSurface->vertexNum;
-	affinityN = CTSurface->vertexNum;
+        strcat(filename2,patientNum);
+        strcat(filename2,"/");
+        strcat(filename2,caseNum);
+        strcat(filename2,"_deformed.off");
+    }
 
-	////////////////////////////////////*compute Geometric Features*/////////////////////////////////////////////
-	initialMemeoryForGlobalVariables();
+    ////////////////////////////////////*read & translate surfaces */////////////////////////////////////////////
+    cout<<"Begin Constructing First Mesh: "<<filename1<<endl;
+    RCSurface = new BasicMesh(filename1,"origin",patientNum,caseNum);
+    RCSurface->ComputeMeshProperty(filename1);
+    if (argc > 10) RCSurface->constructLandmark(landmark1);
+    if (is_orthotropic){
+        cout<<"computing orthotropic case..."<<endl;
+        RCSurface->constructOrthotropic(); 
 
-	cout<<"Begin Computing Geometric Features for First Mesh..."<<endl;
-	RCSurface->findSignatureAll();
-	cout<<"Begin Computing Geometric Features for Second Mesh..."<<endl;
-	CTSurface->findSignatureAll();
+    }
+    cout<<"Begin Construction Second Mesh: "<<filename2<<endl;
+    CTSurface = new BasicMesh(filename2,"deformed",patientNum,caseNum);
+    CTSurface->ComputeMeshProperty(filename2);
+    if (argc > 10) CTSurface->constructLandmark(landmark2);
 
-	////////////////////////////////////*output initial errors*/////////////////////////////////////////////
-	/* synthetic test validation;   doesn't make sense for real data registration */
-	computeStatisticBool(RCSurface,CTSurface,initialError,initialBoundError,initialVariance,initialBoundVar, maxInitialError);
-	//cout<<initialError<<' '<<initialVariance<<' '<<initialBoundError<<' '<<initialBoundVar<<' '<<maxInitialError<<endl;
-	//cout<<statisticVertexNum<<' '<<statisticBoundaryNum<<endl;
+    affinityM = RCSurface->vertexNum;
+    affinityN = CTSurface->vertexNum;
 
-	/* prepare data structures for registration */
-	//RCSurface->constructLink();
-	RCSurface->constructInitialFrameInfo();
-	//RCSurface->constructOccluded();
-	//RCSurface->constructAttractor();
-	RCSurface->constructEdgeList();
-	RCSurface->constructVertexList();
+    ////////////////////////////////////*compute Geometric Features*/////////////////////////////////////////////
+    initialMemeoryForGlobalVariables();
 
-	/////////////////////////////* 3compute correspondences for registration *////////////////////////////////////////////////////////////
-	RCSurface->findCorrespondenceBothWay(CTSurface,EUCLWEIGHT);
-	RCSurface->findMatch2(CTSurface);
-	RCSurface->outputFeatures();
-	
-	/* output force weight */
-	//ofstream fout;
-	//fout.open(filename3);
-	//for (int i = 0; i<affinityM; i++) fout<<matchWeight[i]<<endl;
-	//fout.close();
-	//RCSurface->findClosestPoint(CTSurface);
+    cout<<"Begin Computing Geometric Features for First Mesh..."<<endl;
+    RCSurface->findSignatureAll();
+    cout<<"Begin Computing Geometric Features for Second Mesh..."<<endl;
+    CTSurface->findSignatureAll();
 
-	/////////////////////////////* rendering and optimization *////////////////////////////////////////////////////////////
-// 	beginGlut(argc,argv);
-	if (pthread_mutex_init(&lock, NULL) != 0)
-	{
-		cout<<"mutex init failed\n"<<endl;
-		return 1;
-	}
-	int* tmp;
-	startOptimization(tmp); //direct begin for script
-	return 0;
+    ////////////////////////////////////*output initial errors*/////////////////////////////////////////////
+    /* synthetic test validation;   doesn't make sense for real data registration */
+    computeStatisticBool(RCSurface,CTSurface,initialError,initialBoundError,initialVariance,initialBoundVar, maxInitialError);
+    //cout<<initialError<<' '<<initialVariance<<' '<<initialBoundError<<' '<<initialBoundVar<<' '<<maxInitialError<<endl;
+    //cout<<statisticVertexNum<<' '<<statisticBoundaryNum<<endl;
+
+    /* prepare data structures for registration */
+    //RCSurface->constructLink();
+    RCSurface->constructInitialFrameInfo();
+    //RCSurface->constructOccluded();
+    //RCSurface->constructAttractor();
+    RCSurface->constructEdgeList();
+    RCSurface->constructVertexList();
+
+    /////////////////////////////* 3compute correspondences for registration *////////////////////////////////////////////////////////////
+    RCSurface->findCorrespondenceBothWay(CTSurface,EUCLWEIGHT);
+    RCSurface->findMatch2(CTSurface);
+    RCSurface->outputFeatures();
+
+    /* output force weight */
+    //ofstream fout;
+    //fout.open(filename3);
+    //for (int i = 0; i<affinityM; i++) fout<<matchWeight[i]<<endl;
+    //fout.close();
+    //RCSurface->findClosestPoint(CTSurface);
+
+    /////////////////////////////* rendering and optimization *////////////////////////////////////////////////////////////
+    // 	beginGlut(argc,argv);
+    if (pthread_mutex_init(&lock, NULL) != 0)
+    {
+        cout<<"mutex init failed\n"<<endl;
+        return 1;
+    }
+    int* tmp;
+    startOptimization(tmp); //direct begin for script
+    return 0;
 }
 

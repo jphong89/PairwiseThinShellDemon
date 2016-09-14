@@ -404,7 +404,7 @@ extern float minx,miny,minz;
 extern float maxx,maxy,maxz;
 extern float max_all;
 
-extern link* linkList;
+extern struct link* linkList;
 extern bool* attractor;
 extern bool* attractee;
 extern int* linkTarget;

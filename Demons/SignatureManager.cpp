@@ -418,7 +418,7 @@ void BasicMesh::findSignatureAll(){
 
 void BasicMesh::outputFeatures(){
 	ofstream fout;
-	fout.open(if_name+"features.txt");
+	fout.open((if_name+"features.txt").c_str());
 
 	fout<<vertexNum<<endl;
 

@@ -5,11 +5,11 @@
 namespace po = boost::program_options;
 #endif
 
+#include "MeshObject.h"
 #include <iostream>
 #include <fstream>
 using namespace std;
 
-#include "MeshObject.h"
 
 
 /* gather points around the vertex v using rings on the
@@ -574,7 +574,7 @@ void BasicMesh::constructLink(){
 
 	if (linkList != NULL) delete [] linkList;
 
-	linkList = new link[linkNum];
+	linkList = new struct link[linkNum];
 
 	for (int i = 0; i < linkNum; i++){
 		float a1,a2,a3;
@@ -619,7 +619,7 @@ void BasicMesh::constructLink(){
 
 void BasicMesh::constructAttractor(){
 	ifstream fin;
-	fin.open(attractor_name);
+	fin.open(attractor_name.c_str());
 
 	string temps;
 	int vNum,temp1,temp2;
@@ -651,7 +651,7 @@ void BasicMesh::constructAttractor(){
 	fin.close();
 
 	//////////////////////////////////////////////////////////////////////////
-	fin.open(attractee_name);
+	fin.open(attractee_name.c_str());
 
 	fin>>temps;
 	fin>>vNum>>temp1>>temp2;
@@ -701,7 +701,7 @@ void BasicMesh::constructAttractor(){
 
 void BasicMesh::constructOccluded(){
 	ifstream fin;
-	fin.open(occluded_name);
+	fin.open(occluded_name.c_str());
 
 	int occludedNum,temp;
 	fin>>occludedNum;
@@ -718,7 +718,7 @@ void BasicMesh::constructOccluded(){
 
 void BasicMesh::constructLandmark(string filename){
 	ifstream fin;
-	fin.open(filename);
+	fin.open(filename.c_str());
 
 	fin>>landmarkNum;
 	cout<<"landmark number: "<<landmarkNum<<endl;

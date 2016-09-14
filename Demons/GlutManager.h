@@ -1,8 +1,9 @@
 #ifndef __GLUTMANAGER_H__
 #define __GLUTMANAGER_H__
 #include "MeshObject.h"
-#include "optimization.h"
-#include <gl\glut.h>
+//#include "optimization.h"
+//#include <gl\glut.h>
+#include <GL/glut.h>
 #include "pthread.h"
 
 
@@ -26,9 +27,9 @@ extern bool switch4;
 extern double facetBending;
 extern double facetStretching;
 extern double distantLink;
-extern LARGE_INTEGER t1;
-extern LARGE_INTEGER t2;
-extern LARGE_INTEGER tc;
+//extern LARGE_INTEGER t1;
+//extern LARGE_INTEGER t2;
+//extern LARGE_INTEGER tc;
 extern double thetaDif1;
 extern double thetaDif2;
 extern double thetaDif3;
